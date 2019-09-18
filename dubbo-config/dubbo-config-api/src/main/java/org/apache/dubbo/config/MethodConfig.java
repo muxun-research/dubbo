@@ -155,7 +155,13 @@ public class MethodConfig extends AbstractMethodConfig {
         }
     }
 
-    public static List<MethodConfig> constructMethodConfig(Method[] methods) {
+	/**
+	 * 构建MethodConfig集合
+	 * 仅仅是遍历一遍
+	 * @param methods {@link MethodConfig}数组
+	 * @return {@link MethodConfig}集合
+	 */
+	public static List<MethodConfig> constructMethodConfig(Method[] methods) {
         if (methods != null && methods.length != 0) {
             List<MethodConfig> methodConfigs = new ArrayList<MethodConfig>(methods.length);
             for (int i = 0; i < methods.length; i++) {

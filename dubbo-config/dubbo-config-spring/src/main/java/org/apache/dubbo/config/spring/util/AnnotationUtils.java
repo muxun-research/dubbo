@@ -130,28 +130,30 @@ public class AnnotationUtils {
 
         ClassLoader classLoader = defaultInterfaceClass != null ? defaultInterfaceClass.getClassLoader() : Thread.currentThread().getContextClassLoader();
 
-        Class<?> interfaceClass = getAttribute(attributes, "interfaceClass");
-
+		// 获取interfaceClass属性
+		Class<?> interfaceClass = getAttribute(attributes, "interfaceClass");
+		// 如果interfaceClass属性是默认值
         if (void.class.equals(interfaceClass)) { // default or set void.class for purpose.
 
             interfaceClass = null;
-
+			// 获取interfaceName属性
             String interfaceClassName = getAttribute(attributes, "interfaceName");
-
+			// 如果interfaceName有属性值
             if (hasText(interfaceClassName)) {
+				// 加载对应的接口
                 if (ClassUtils.isPresent(interfaceClassName, classLoader)) {
                     interfaceClass = resolveClassName(interfaceClassName, classLoader);
                 }
             }
 
         }
-
+		// 如果没有在@Service注解中指定接口
         if (interfaceClass == null && defaultInterfaceClass != null) {
-            // Find all interfaces from the annotated class
-            // To resolve an issue : https://github.com/apache/dubbo/issues/3251
+			// 获取我们使用@Service注解的类使用的接口集合
             Class<?>[] allInterfaces = getAllInterfacesForClass(defaultInterfaceClass);
 
             if (allInterfaces.length > 0) {
+				// dubbo会使用第一个接口作为interfaceClass
                 interfaceClass = allInterfaces[0];
             }
 

@@ -99,7 +99,7 @@ public abstract class AnnotationInjectedBeanPostProcessor extends
     private int order = Ordered.LOWEST_PRECEDENCE - 3;
 
     /**
-     * @param annotationTypes the multiple types of {@link Annotation annotations}
+	 * @param annotationTypes 需要解析的注解类型
      * @since 2.7.3
      */
     public AnnotationInjectedBeanPostProcessor(Class<? extends Annotation>... annotationTypes) {

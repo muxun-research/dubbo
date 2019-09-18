@@ -208,11 +208,11 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         return urls;
     }
 
-    /**
-     * This method should be called right after the creation of this class's instance, before any property in other config modules is used.
-     * Check each config modules are created properly and override their properties if necessary.
-     */
-    public void checkAndUpdateSubConfigs() {
+	/**
+	 * 这个方法需要在类创建之后，在其他配置模块使用之前被调用
+	 * 检查每个配置模块是否适当的创建，并且在必要时可以重写他们的属性
+	 */
+	public void checkAndUpdateSubConfigs() {
         if (StringUtils.isEmpty(interfaceName)) {
             throw new IllegalStateException("<dubbo:reference interface=\"\" /> interface not allow null!");
         }
@@ -245,7 +245,8 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
 
         if (destroyed) {
             throw new IllegalStateException("The invoker of ReferenceConfig(" + url + ") has already destroyed!");
-        }
+		}
+		// 如果接口代理引用没有实现，进行实现
         if (ref == null) {
             init();
         }
@@ -270,6 +271,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
     }
 
     private void init() {
+		// 如果已经初始化，不继续进行初始化
         if (initialized) {
             return;
         }
@@ -284,16 +286,18 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             String revision = Version.getVersion(interfaceClass, version);
             if (revision != null && revision.length() > 0) {
                 map.put(REVISION_KEY, revision);
-            }
-
+			}
+			// 获取调用接口的所有方法
             String[] methods = Wrapper.getWrapper(interfaceClass).getMethodNames();
             if (methods.length == 0) {
                 logger.warn("No method found in service interface " + interfaceClass.getName());
                 map.put(METHODS_KEY, ANY_VALUE);
-            } else {
+			} else {
+				// 添加methods属性，方法名以","分隔
                 map.put(METHODS_KEY, StringUtils.join(new HashSet<String>(Arrays.asList(methods)), COMMA_SEPARATOR));
             }
-        }
+		}
+		// 添加interface属性
         map.put(INTERFACE_KEY, interfaceName);
         appendParameters(map, metrics);
         appendParameters(map, application);
@@ -325,8 +329,8 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             throw new IllegalArgumentException("Specified invalid registry ip from property:" + DUBBO_IP_TO_REGISTRY + ", value:" + hostToRegistry);
         }
         map.put(REGISTER_IP_KEY, hostToRegistry);
-
-        ref = createProxy(map);
+		// map里面存储的是消费者的信息
+		ref = createProxy(map);
 
         String serviceKey = URL.buildKey(interfaceName, group, version);
         ApplicationModel.initConsumerModel(serviceKey, buildConsumerModel(serviceKey, attributes));
@@ -348,6 +352,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
+	// 构建请求注册中心的代理
     private T createProxy(Map<String, String> map) {
         if (shouldJvmRefer(map)) {
             URL url = new URL(LOCAL_PROTOCOL, LOCALHOST_VALUE, 0, interfaceClass.getName()).addParameters(map);

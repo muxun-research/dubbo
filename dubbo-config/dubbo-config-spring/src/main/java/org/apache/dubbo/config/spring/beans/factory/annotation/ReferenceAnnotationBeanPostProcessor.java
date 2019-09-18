@@ -22,7 +22,6 @@ import org.apache.dubbo.config.spring.ReferenceBean;
 import org.apache.dubbo.config.spring.ServiceBean;
 import org.apache.dubbo.config.spring.context.event.ServiceBeanExportedEvent;
 import org.apache.dubbo.config.spring.util.AnnotationUtils;
-
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.InjectionMetadata;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -84,7 +83,7 @@ public class ReferenceAnnotationBeanPostProcessor extends AnnotationInjectedBean
     private ApplicationContext applicationContext;
 
     /**
-     * To support the legacy annotation that is @com.alibaba.dubbo.config.annotation.Reference since 2.7.3
+	 * 需要支持{@link Reference}和{@link com.alibaba.dubbo.config.annotation.Reference}两种版本的注解
      */
     public ReferenceAnnotationBeanPostProcessor() {
         super(Reference.class, com.alibaba.dubbo.config.annotation.Reference.class);
@@ -124,27 +123,24 @@ public class ReferenceAnnotationBeanPostProcessor extends AnnotationInjectedBean
     protected Object doGetInjectedBean(AnnotationAttributes attributes, Object bean, String beanName, Class<?> injectedType,
                                        InjectionMetadata.InjectedElement injectedElement) throws Exception {
 
-        /**
-         * The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
-         */
+		// 构建引用BeanName，也就是ServiceBean的BeanName，injectedType是接口名称
         String referencedBeanName = buildReferencedBeanName(attributes, injectedType);
 
-        /**
-         * The name of bean that is declared by {@link Reference @Reference} annotation injection
-         */
+		// 如果beanName为""，根据id属性生成一个BeanName
+		// 如果没有referenceBeanName，会生成一个@Reference()类型的BeanName
         String referenceBeanName = getReferenceBeanName(attributes, injectedType);
-
+		// 构建调用接口方法的ReferenceBean，并放入缓存中
         ReferenceBean referenceBean = buildReferenceBeanIfAbsent(referenceBeanName, attributes, injectedType);
-
+		// 将ReferenceBean注册为Spring Bean
         registerReferenceBean(referencedBeanName, referenceBean, attributes, injectedType);
-
+		// 缓存已经注册为Spring Bean的ReferenceBean
         cacheInjectedReferenceBean(referenceBean, injectedElement);
-
+		// 获取或者创建代理
         return getOrCreateProxy(referencedBeanName, referenceBeanName, referenceBean, injectedType);
     }
 
     /**
-     * Register an instance of {@link ReferenceBean} as a Spring Bean
+	 * 将{@link ReferenceBean}组装成Spring Bean
      *
      * @param referencedBeanName The name of bean that annotated Dubbo's {@link Service @Service} in the Spring {@link ApplicationContext}
      * @param referenceBean      the instance of {@link ReferenceBean} is about to register into the Spring {@link ApplicationContext}
@@ -159,19 +155,18 @@ public class ReferenceAnnotationBeanPostProcessor extends AnnotationInjectedBean
         ConfigurableListableBeanFactory beanFactory = getBeanFactory();
 
         String beanName = getReferenceBeanName(attributes, interfaceClass);
-
+		// 如果@Service接口是本地接口
         if (existsServiceBean(referencedBeanName)) { // If @Service bean is local one
-            /**
-             * Get  the @Service's BeanDefinition from {@link BeanFactory}
-             * Refer to {@link ServiceAnnotationBeanPostProcessor#buildServiceBeanDefinition}
-             */
+			// 获取已经注入的BeanDefinition
             AbstractBeanDefinition beanDefinition = (AbstractBeanDefinition) beanFactory.getBeanDefinition(referencedBeanName);
+			// 获取@Service接口BeanDefinition的引用
             RuntimeBeanReference runtimeBeanReference = (RuntimeBeanReference) beanDefinition.getPropertyValues().get("ref");
-            // The name of bean annotated @Service
+			// 获取@Service接口的BeanName
             String serviceBeanName = runtimeBeanReference.getBeanName();
-            // register Alias rather than a new bean name, in order to reduce duplicated beans
+			// 用@Service接口调用者的视角，给@Service接口的ServiceBean起一个别名
             beanFactory.registerAlias(serviceBeanName, beanName);
-        } else { // Remote @Service Bean
+		} else {
+			// 为@Service调用接口创建一个Bean，将ReferenceBean组装成Spring Bean
             if (!beanFactory.containsBean(beanName)) {
                 beanFactory.registerSingleton(beanName, referenceBean);
             }
@@ -239,10 +234,12 @@ public class ReferenceAnnotationBeanPostProcessor extends AnnotationInjectedBean
      * @since 2.7.4
      */
     private Object getOrCreateProxy(String referencedBeanName, String referenceBeanName, ReferenceBean referenceBean, Class<?> serviceInterfaceType) {
+		// 如果已经存在ReferenceBean，则直接创建一个代理
         if (existsServiceBean(referencedBeanName)) { // If the local @Service Bean exists, build a proxy of ReferenceBean
             return newProxyInstance(getClassLoader(), new Class[]{serviceInterfaceType},
                     wrapInvocationHandler(referenceBeanName, referenceBean));
-        } else {                                    // ReferenceBean should be initialized and get immediately
+		} else {
+			// 初始化ReferenceBean代理
             return referenceBean.get();
         }
     }
