@@ -157,7 +157,7 @@ public final class Version {
 
     public static String getVersion(Class<?> cls, String defaultVersion) {
         try {
-            // find version info from MANIFEST.MF first
+			// 先从依赖的MANIFEST.MF中获取版本号
             Package pkg = cls.getPackage();
             String version = null;
             if (pkg != null) {
@@ -172,7 +172,7 @@ public final class Version {
                 }
             }
 
-            // guess version fro jar file name if nothing's found from MANIFEST.MF
+			// 如果没有获取到，再从依赖jar的命名上获取版本号
             CodeSource codeSource = cls.getProtectionDomain().getCodeSource();
             if (codeSource == null) {
                 logger.info("No codeSource for class " + cls.getName() + " when getVersion, use default version " + defaultVersion);
@@ -184,10 +184,10 @@ public final class Version {
                 version = getFromFile(file);
             }
 
-            // return default version if no version info is found
+			// 如果炼钢总方式都没有找到，返回指定的默认版本号
             return StringUtils.isEmpty(version) ? defaultVersion : version;
         } catch (Throwable e) {
-            // return default version when any exception is thrown
+			// 异常情况下返回指定的默认版本号
             logger.error("return default version, ignore exception " + e.getMessage(), e);
             return defaultVersion;
         }

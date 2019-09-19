@@ -272,15 +272,18 @@ public class ReferenceAnnotationBeanPostProcessor extends AnnotationInjectedBean
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             Object result;
             try {
-                if (bean == null) { // If the bean is not initialized, invoke init()
-                    // issue: https://github.com/apache/dubbo/issues/3429
+				// 如果Bean没有初始化，对Bean进行初始化
+				// https://github.com/apache/dubbo/issues/3429
+				if (bean == null) {
                     init();
                 }
+				// 调用指定方法
                 result = method.invoke(bean, args);
             } catch (InvocationTargetException e) {
-                // re-throws the actual Exception.
+				// 由于是代理，需要抛出代理目标的异常
                 throw e.getTargetException();
             }
+			// 返回代理目标执行结果
             return result;
         }
 

@@ -241,6 +241,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
     }
 
     public synchronized T get() {
+
         checkAndUpdateSubConfigs();
 
         if (destroyed) {
@@ -278,16 +279,18 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         checkStubAndLocal(interfaceClass);
         checkMock(interfaceClass);
         Map<String, String> map = new HashMap<String, String>();
-
+		// 标识是消费者
         map.put(SIDE_KEY, CONSUMER_SIDE);
-
+		// 标识dubbo版本，dubbo包版本，PID，时间戳
         appendRuntimeParameters(map);
         if (!ProtocolUtils.isGeneric(getGeneric())) {
+			// 获取接口的version
             String revision = Version.getVersion(interfaceClass, version);
+			// 存在version的情况，则写入revision
             if (revision != null && revision.length() > 0) {
                 map.put(REVISION_KEY, revision);
 			}
-			// 获取调用接口的所有方法
+			// 获取调用接口的所有方法名称
             String[] methods = Wrapper.getWrapper(interfaceClass).getMethodNames();
             if (methods.length == 0) {
                 logger.warn("No method found in service interface " + interfaceClass.getName());
@@ -324,6 +327,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
 
         String hostToRegistry = ConfigUtils.getSystemProperty(DUBBO_IP_TO_REGISTRY);
         if (StringUtils.isEmpty(hostToRegistry)) {
+			// 需要进行注册的IP，默认是本机的IP地址
             hostToRegistry = NetUtils.getLocalHost();
         } else if (isInvalidLocalHost(hostToRegistry)) {
             throw new IllegalArgumentException("Specified invalid registry ip from property:" + DUBBO_IP_TO_REGISTRY + ", value:" + hostToRegistry);
@@ -331,8 +335,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         map.put(REGISTER_IP_KEY, hostToRegistry);
 		// map里面存储的是消费者的信息
 		ref = createProxy(map);
-
+		// 构建请求服务key，格式group/interfaceName:version
         String serviceKey = URL.buildKey(interfaceName, group, version);
+		// 构建消费者模型
         ApplicationModel.initConsumerModel(serviceKey, buildConsumerModel(serviceKey, attributes));
         initialized = true;
     }
@@ -348,6 +353,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 methods = interfaceClass.getMethods();
             }
         }
+		// 注册Service调用接口，及它的所有方法，ReferenceBean和属性
         return new ConsumerModel(serviceKey, serviceInterface, ref, methods, attributes);
     }
 
@@ -361,8 +367,10 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 logger.info("Using injvm service " + interfaceClass.getName());
             }
         } else {
-            urls.clear(); // reference retry init will add url to urls, lead to OOM
-            if (url != null && url.length() > 0) { // user specified URL, could be peer-to-peer address, or register center's address.
+			// 避免OOM
+			urls.clear();
+			// 如果我们提供了直接连接地址，可以是provider地址，也可以是注册中心地址
+			if (url != null && url.length() > 0) {
                 String[] us = SEMICOLON_SPLIT_PATTERN.split(url);
                 if (us != null && us.length > 0) {
                     for (String u : us) {
@@ -370,6 +378,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                         if (StringUtils.isEmpty(url.getPath())) {
                             url = url.setPath(interfaceName);
                         }
+						// 带有registry即为需要连接注册中心
                         if (REGISTRY_PROTOCOL.equals(url.getProtocol())) {
                             urls.add(url.addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map)));
                         } else {
@@ -377,48 +386,56 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                         }
                     }
                 }
-            } else { // assemble URL from register center's configuration
-                // if protocols not injvm checkRegistry
+			} else {
+				// 在不是本机直连的情况下，需要连接注册中心
                 if (!LOCAL_PROTOCOL.equalsIgnoreCase(getProtocol())){
                     checkRegistry();
+					// 获取注册中心的url集合
                     List<URL> us = loadRegistries(false);
                     if (CollectionUtils.isNotEmpty(us)) {
                         for (URL u : us) {
+							// 加载监控中心url
                             URL monitorUrl = loadMonitor(u);
                             if (monitorUrl != null) {
                                 map.put(MONITOR_KEY, URL.encode(monitorUrl.toFullString()));
                             }
+							// 将请求url带上服务引用参数
                             urls.add(u.addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map)));
                         }
                     }
+					// 不允许出现有引用调用，但是没有提供指定地址，也没有提供注册中心的情况出现
                     if (urls.isEmpty()) {
                         throw new IllegalStateException("No such any registry to reference " + interfaceName + " on the consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion() + ", please config <dubbo:registry address=\"...\" /> to your spring config.");
                     }
                 }
             }
-
+			// 如果仅有一个url，引用服务，返回invoker对象
             if (urls.size() == 1) {
                 invoker = REF_PROTOCOL.refer(interfaceClass, urls.get(0));
             } else {
+				// 如果存在多个url的情况，
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;
                 for (URL url : urls) {
                     invokers.add(REF_PROTOCOL.refer(interfaceClass, url));
+					// 使用最后一个注册中心url
                     if (REGISTRY_PROTOCOL.equals(url.getProtocol())) {
-                        registryURL = url; // use last registry url
+						registryURL = url;
                     }
                 }
-                if (registryURL != null) { // registry url is available
-                    // use RegistryAwareCluster only when register's CLUSTER is available
+				// 如果存在可用的注册中心url
+				if (registryURL != null) {
+					// 对有注册中心的Cluster使用RegistryAwareCluster
                     URL u = registryURL.addParameter(CLUSTER_KEY, RegistryAwareCluster.NAME);
-                    // The invoker wrap relation would be: RegistryAwareClusterInvoker(StaticDirectory) -> FailoverClusterInvoker(RegistryDirectory, will execute route) -> Invoker
+					// invoker的关心为：RegistryAwareClusterInvoker(StaticDirectory) -> FailoverClusterInvoker(RegistryDirectory, will execute route) -> Invoker
                     invoker = CLUSTER.join(new StaticDirectory(u, invokers));
-                } else { // not a registry url, must be direct invoke.
+					// 如果没有注册中心url，需要直连，获取invokers中的第一个作为url
+				} else {
                     invoker = CLUSTER.join(new StaticDirectory(invokers));
                 }
             }
         }
-
+		// 启动前检查
         if (shouldCheck() && !invoker.isAvailable()) {
             throw new IllegalStateException("Failed to check the status of the service " + interfaceName + ". No provider available for the service " + (group == null ? "" : group + "/") + interfaceName + (version == null ? "" : ":" + version) + " from the url " + invoker.getUrl() + " to the consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion());
         }
@@ -434,7 +451,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             URL consumerURL = new URL(CONSUMER_PROTOCOL, map.remove(REGISTER_IP_KEY), 0, map.get(INTERFACE_KEY), map);
             metadataReportService.publishConsumer(consumerURL);
         }
-        // create service proxy
+		// 创建服务代理
         return (T) PROXY_FACTORY.getProxy(invoker);
     }
 
@@ -450,11 +467,11 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         URL tmpUrl = new URL("temp", "localhost", 0, map);
         boolean isJvmRefer;
         if (isInjvm() == null) {
-            // if a url is specified, don't do local reference
+			// 如果一寄给你指定url了，则不使用本地Reference
             if (url != null && url.length() > 0) {
                 isJvmRefer = false;
             } else {
-                // by default, reference local service if there is
+				// 是否指向本地Reference
                 isJvmRefer = InjvmProtocol.getInjvmProtocol().isInjvmRefer(tmpUrl);
             }
         } else {

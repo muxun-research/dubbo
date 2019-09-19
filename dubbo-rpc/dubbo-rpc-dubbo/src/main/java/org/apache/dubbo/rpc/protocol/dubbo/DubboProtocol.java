@@ -62,27 +62,27 @@ import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
-import static org.apache.dubbo.rpc.Constants.LAZY_CONNECT_KEY;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.ON_CONNECT_KEY;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.ON_DISCONNECT_KEY;
-import static org.apache.dubbo.remoting.Constants.DEFAULT_HEARTBEAT;
-import static org.apache.dubbo.remoting.Constants.HEARTBEAT_KEY;
 import static org.apache.dubbo.remoting.Constants.CHANNEL_READONLYEVENT_SENT_KEY;
 import static org.apache.dubbo.remoting.Constants.CLIENT_KEY;
 import static org.apache.dubbo.remoting.Constants.CODEC_KEY;
+import static org.apache.dubbo.remoting.Constants.CONNECTIONS_KEY;
+import static org.apache.dubbo.remoting.Constants.DEFAULT_HEARTBEAT;
 import static org.apache.dubbo.remoting.Constants.DEFAULT_REMOTING_CLIENT;
+import static org.apache.dubbo.remoting.Constants.HEARTBEAT_KEY;
 import static org.apache.dubbo.remoting.Constants.SERVER_KEY;
 import static org.apache.dubbo.rpc.Constants.DEFAULT_REMOTING_SERVER;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.CALLBACK_SERVICE_KEY;
-import static org.apache.dubbo.remoting.Constants.CONNECTIONS_KEY;
 import static org.apache.dubbo.rpc.Constants.DEFAULT_STUB_EVENT;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.IS_CALLBACK_SERVICE;
 import static org.apache.dubbo.rpc.Constants.IS_SERVER_KEY;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.OPTIMIZER_KEY;
+import static org.apache.dubbo.rpc.Constants.LAZY_CONNECT_KEY;
 import static org.apache.dubbo.rpc.Constants.STUB_EVENT_KEY;
 import static org.apache.dubbo.rpc.Constants.STUB_EVENT_METHODS_KEY;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.SHARE_CONNECTIONS_KEY;
+import static org.apache.dubbo.rpc.protocol.dubbo.Constants.CALLBACK_SERVICE_KEY;
 import static org.apache.dubbo.rpc.protocol.dubbo.Constants.DEFAULT_SHARE_CONNECTIONS;
+import static org.apache.dubbo.rpc.protocol.dubbo.Constants.IS_CALLBACK_SERVICE;
+import static org.apache.dubbo.rpc.protocol.dubbo.Constants.ON_CONNECT_KEY;
+import static org.apache.dubbo.rpc.protocol.dubbo.Constants.ON_DISCONNECT_KEY;
+import static org.apache.dubbo.rpc.protocol.dubbo.Constants.OPTIMIZER_KEY;
+import static org.apache.dubbo.rpc.protocol.dubbo.Constants.SHARE_CONNECTIONS_KEY;
 
 
 /**
@@ -96,13 +96,14 @@ public class DubboProtocol extends AbstractProtocol {
     private static final String IS_CALLBACK_SERVICE_INVOKE = "_isCallBackServiceInvoke";
     private static DubboProtocol INSTANCE;
 
-    /**
-     * <host:port,Exchanger>
-     */
+	/**
+	 * 请求的服务器集合
+	 * (host:ip, ExchangeServer)
+	 */
     private final Map<String, ExchangeServer> serverMap = new ConcurrentHashMap<>();
-    /**
-     * <host:port,Exchanger>
-     */
+	/**
+	 * (host:ip, List<ReferenceCountExchangeClient>)
+	 */
     private final Map<String, List<ReferenceCountExchangeClient>> referenceClientMap = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Object> locks = new ConcurrentHashMap<>();
     private final Set<String> optimizers = new ConcurrentHashSet<>();
@@ -280,10 +281,12 @@ public class DubboProtocol extends AbstractProtocol {
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
+		// 获取请求url
         URL url = invoker.getUrl();
 
-        // export service.
+		// 获取服务的key
         String key = serviceKey(url);
+		// 创建DubboExporter
         DubboExporter<T> exporter = new DubboExporter<T>(invoker, key, exporterMap);
         exporterMap.put(key, exporter);
 
@@ -301,25 +304,35 @@ public class DubboProtocol extends AbstractProtocol {
             } else {
                 stubServiceMethodsMap.put(url.getServiceKey(), stubServiceMethods);
             }
-        }
-
+		}
+		// 启动服务
         openServer(url);
+		// 优化序列化器
         optimizeSerialization(url);
 
         return exporter;
     }
 
     private void openServer(URL url) {
-        // find server.
+		// 示例：dubbo://172.19.164.140:20880/
+		// com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService?
+		// anyhost=true&application=dubbo-client-first&bean.name=ServiceBean:com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService
+		// &bind.ip=172.19.164.140&bind.port=20880&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&interface=com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService&methods=shine
+		// &pid=10033&qos.enable=false
+		// &register=true&release=2.7.3&side=provider&timestamp=1568885985111
+		// 获取host:ip部分
         String key = url.getAddress();
-        //client can export a service which's only for server to invoke
+		// 只有provider才能暴露服务，进行一次校验
         boolean isServer = url.getParameter(IS_SERVER_KEY, true);
         if (isServer) {
+			// 查看缓存中是有指定的key
             ExchangeServer server = serverMap.get(key);
             if (server == null) {
+				// 存在并发的情况，加双重检验锁
                 synchronized (this) {
                     server = serverMap.get(key);
                     if (server == null) {
+						// 创建一个ExchangeServer，放入缓存中
                         serverMap.put(key, createServer(url));
                     }
                 }
@@ -331,21 +344,35 @@ public class DubboProtocol extends AbstractProtocol {
     }
 
     private ExchangeServer createServer(URL url) {
+		// 添加一些新的参数，重新构造
         url = URLBuilder.from(url)
-                // send readonly event when server closes, it's enabled by default
+				// 当服务器关闭时，仍然允许发送只读事件
                 .addParameterIfAbsent(CHANNEL_READONLYEVENT_SENT_KEY, Boolean.TRUE.toString())
-                // enable heartbeat by default
+				// 添加心跳机制，心跳机制60s
                 .addParameterIfAbsent(HEARTBEAT_KEY, String.valueOf(DEFAULT_HEARTBEAT))
+				//
                 .addParameter(CODEC_KEY, DubboCodec.NAME)
                 .build();
+		// 示例：
+		// dubbo://172.19.164.140:20880/com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService?
+		// anyhost=true&application=dubbo-client-first&bean.name=ServiceBean:com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService
+		// &bind.ip=172.19.164.140&bind.port=20880
+		// &channel.readonly.sent=true
+		// &codec=dubbo
+		// &deprecated=false&dubbo=2.0.2&dynamic=true&generic=false
+		// &heartbeat=60000
+		// &interface=com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService&methods=shine&pid=10033
+		// &qos.enable=false&register=true&release=2.7.3&side=provider&timestamp=1568885985111
+		// 获取Server类型，默认为Netty
         String str = url.getParameter(SERVER_KEY, DEFAULT_REMOTING_SERVER);
-
+		// 如果传输类型dubbo不支持，或者开发者没有实现，抛出异常
         if (str != null && str.length() > 0 && !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {
             throw new RpcException("Unsupported server type: " + str + ", url: " + url);
         }
 
         ExchangeServer server;
-        try {
+		try {
+			// 构建并启动服务器
             server = Exchangers.bind(url, requestHandler);
         } catch (RemotingException e) {
             throw new RpcException("Fail to start server(url: " + url + ") " + e.getMessage(), e);
@@ -360,44 +387,52 @@ public class DubboProtocol extends AbstractProtocol {
         }
 
         return server;
-    }
+	}
 
-    private void optimizeSerialization(URL url) throws RpcException {
-        String className = url.getParameter(OPTIMIZER_KEY, "");
-        if (StringUtils.isEmpty(className) || optimizers.contains(className)) {
-            return;
-        }
+	/**
+	 * 初始化序列化器
+	 * @param url provider服务url
+	 */
+	private void optimizeSerialization(URL url) throws RpcException {
+		// 获取优化器，默认为""
+		String className = url.getParameter(OPTIMIZER_KEY, "");
+		// 如果没有指定优化器，或者已经注册序列化器，不继续进行初始化
+		if (StringUtils.isEmpty(className) || optimizers.contains(className)) {
+			return;
+		}
 
-        logger.info("Optimizing the serialization process for Kryo, FST, etc...");
+		logger.info("Optimizing the serialization process for Kryo, FST, etc...");
 
-        try {
-            Class clazz = Thread.currentThread().getContextClassLoader().loadClass(className);
-            if (!SerializationOptimizer.class.isAssignableFrom(clazz)) {
-                throw new RpcException("The serialization optimizer " + className + " isn't an instance of " + SerializationOptimizer.class.getName());
-            }
+		try {
+			// 加载SerializationOptimizer实现类
+			Class clazz = Thread.currentThread().getContextClassLoader().loadClass(className);
 
-            SerializationOptimizer optimizer = (SerializationOptimizer) clazz.newInstance();
+			if (!SerializationOptimizer.class.isAssignableFrom(clazz)) {
+				throw new RpcException("The serialization optimizer " + className + " isn't an instance of " + SerializationOptimizer.class.getName());
+			}
+			// 创建指定SerializationOptimizer实例
+			SerializationOptimizer optimizer = (SerializationOptimizer) clazz.newInstance();
+			// 如果需要序列化的类为null，不进行初始化
+			if (optimizer.getSerializableClasses() == null) {
+				return;
+			}
+			// 获取需要进行序列化的类，注册需要序列化的类
+			for (Class c : optimizer.getSerializableClasses()) {
+				SerializableClassRegistry.registerClass(c);
+			}
+			// 当前服务调用也存储一份序列化类
+			optimizers.add(className);
 
-            if (optimizer.getSerializableClasses() == null) {
-                return;
-            }
+		} catch (ClassNotFoundException e) {
+			throw new RpcException("Cannot find the serialization optimizer class: " + className, e);
 
-            for (Class c : optimizer.getSerializableClasses()) {
-                SerializableClassRegistry.registerClass(c);
-            }
+		} catch (InstantiationException e) {
+			throw new RpcException("Cannot instantiate the serialization optimizer class: " + className, e);
 
-            optimizers.add(className);
-
-        } catch (ClassNotFoundException e) {
-            throw new RpcException("Cannot find the serialization optimizer class: " + className, e);
-
-        } catch (InstantiationException e) {
-            throw new RpcException("Cannot instantiate the serialization optimizer class: " + className, e);
-
-        } catch (IllegalAccessException e) {
-            throw new RpcException("Cannot instantiate the serialization optimizer class: " + className, e);
-        }
-    }
+		} catch (IllegalAccessException e) {
+			throw new RpcException("Cannot instantiate the serialization optimizer class: " + className, e);
+		}
+	}
 
     @Override
     public <T> Invoker<T> protocolBindingRefer(Class<T> serviceType, URL url) throws RpcException {

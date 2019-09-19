@@ -25,12 +25,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * Serialization strategy interface that specifies a serializer. (SPI, Singleton, ThreadSafe)
- *
- * The default extension is hessian2 and the default serialization implementation of the dubbo protocol.
- * <pre>
- *     e.g. &lt;dubbo:protocol serialization="xxx" /&gt;
- * </pre>
+ * 序列化策略接口，用于指定一个序列化器
+ * 使用SPI指定一个序列化器，是单例的，线程安全的
+ * 默认的序列化器是hessian2
+ * 一般用法：<dubbo:protocol serialization="" />
  */
 @SPI("hessian2")
 public interface Serialization {

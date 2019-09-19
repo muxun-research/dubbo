@@ -417,6 +417,7 @@ public class RegistryConfig extends AbstractConfig {
         if (!isValid()) {
             return false;
         }
+		// 协议类型是protocol，或者协议地址是以zookeeper开头
         return ZOOKEEPER_PROTOCOL.equals(getProtocol())
                 || getAddress().startsWith(ZOOKEEPER_PROTOCOL);
     }

@@ -22,13 +22,14 @@ import org.apache.dubbo.common.extension.SPI;
 
 /**
  * Protocol. (API/SPI, Singleton, ThreadSafe)
+ * dubbo的请求协议
+ * 单例、线程安全
  */
 @SPI("dubbo")
 public interface Protocol {
 
     /**
-     * Get default port when user doesn't config the port.
-     *
+	 * 如果开发者没有配置端口，提供默认的端口，
      * @return default port
      */
     int getDefaultPort();

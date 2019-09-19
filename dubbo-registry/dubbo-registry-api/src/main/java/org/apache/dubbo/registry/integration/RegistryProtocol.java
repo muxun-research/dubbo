@@ -121,15 +121,25 @@ public class RegistryProtocol implements Protocol {
     };
 
     private final static Logger logger = LoggerFactory.getLogger(RegistryProtocol.class);
-    private static RegistryProtocol INSTANCE;
+	// 单例对象
+	private static RegistryProtocol INSTANCE;
+
     private final Map<URL, NotifyListener> overrideListeners = new ConcurrentHashMap<>();
     private final Map<String, ServiceConfigurationListener> serviceConfigurationListeners = new ConcurrentHashMap<>();
     private final ProviderConfigurationListener providerConfigurationListener = new ProviderConfigurationListener();
-    //To solve the problem of RMI repeated exposure port conflicts, the services that have been exposed are no longer exposed.
-    //providerurl <--> exporter
+	/**
+	 * 绑定集合关系，key 服务dubbo url value exporter
+	 * 用于解决RMI重复暴露端口冲突的问题，如果服务已经暴露，则不再暴露
+	 */
     private final ConcurrentMap<String, ExporterChangeableWrapper<?>> bounds = new ConcurrentHashMap<>();
     private Cluster cluster;
-    private Protocol protocol;
+	/**
+	 * 自适应扩展类，通过SPI注入，
+	 */
+	private Protocol protocol;
+	/**
+	 * 自适应扩展类，通过SPI注入
+	 */
     private RegistryFactory registryFactory;
     private ProxyFactory proxyFactory;
 
@@ -193,40 +203,42 @@ public class RegistryProtocol implements Protocol {
 
     @Override
     public <T> Exporter<T> export(final Invoker<T> originInvoker) throws RpcException {
+		// 获取注册中心的url
         URL registryUrl = getRegistryUrl(originInvoker);
-        // url to export locally
+		// 获取服务提供者的url
         URL providerUrl = getProviderUrl(originInvoker);
 
-        // Subscribe the override data
-        // FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call
-        //  the same service. Because the subscribed is cached key with the name of the service, it causes the
-        //  subscription information to cover.
+		// 使用OverrideListener对象，订阅配置规则
         final URL overrideSubscribeUrl = getSubscribedOverrideUrl(providerUrl);
         final OverrideListener overrideSubscribeListener = new OverrideListener(overrideSubscribeUrl, originInvoker);
         overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
 
         providerUrl = overrideUrlWithConfig(providerUrl, overrideSubscribeListener);
-        //export invoker
+		// 暴露本地启动服务，但是不向注册中心注册服务
         final ExporterChangeableWrapper<T> exporter = doLocalExport(originInvoker, providerUrl);
 
-        // url to registry
+		// 根据url获取Registry
         final Registry registry = getRegistry(originInvoker);
+		// 根据url反推出registerUrl
         final URL registeredProviderUrl = getRegisteredProviderUrl(providerUrl, registryUrl);
         ProviderInvokerWrapper<T> providerInvokerWrapper = ProviderConsumerRegTable.registerProvider(originInvoker,
                 registryUrl, registeredProviderUrl);
-        //to judge if we need to delay publish
+		// 判断是否需要延迟发布
         boolean register = providerUrl.getParameter(REGISTER_KEY, true);
         if (register) {
+			// 不需要延迟发布，直接调用RegisterFactory#registe()进行注册
             register(registryUrl, registeredProviderUrl);
+			// 标识Provider已注册
             providerInvokerWrapper.setReg(true);
         }
 
         // Deprecated! Subscribe to override rules in 2.6.x or before.
         registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);
-
+		// 设置本地缓存的注册中心url
         exporter.setRegisterUrl(registeredProviderUrl);
+		// 设置本地缓存的配置订阅url
         exporter.setSubscribeUrl(overrideSubscribeUrl);
-        //Ensure that a new exporter instance is returned every time export
+		// 确保每次export时都会创建一个新的exporter实例
         return new DestroyableExporter<>(exporter);
     }
 
@@ -239,8 +251,10 @@ public class RegistryProtocol implements Protocol {
 
     @SuppressWarnings("unchecked")
     private <T> ExporterChangeableWrapper<T> doLocalExport(final Invoker<T> originInvoker, URL providerUrl) {
+		// 获取已缓存或者需要缓存的key
         String key = getCacheKey(originInvoker);
-
+		// 从bounds中获取指定key，没有指定key
+		// 组装一个ExporterChangeableWrapper，添加到bounds中
         return (ExporterChangeableWrapper<T>) bounds.computeIfAbsent(key, s -> {
             Invoker<?> invokerDelegate = new InvokerDelegate<>(originInvoker, providerUrl);
             return new ExporterChangeableWrapper<>((Exporter<T>) protocol.export(invokerDelegate), originInvoker);

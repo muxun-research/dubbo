@@ -555,6 +555,8 @@ public abstract class AbstractConfig implements Serializable {
      */
     public void refresh() {
         try {
+			// 获取以dubbo开头的属性
+			// 比如MonitorConfig，属性前缀为dubbo.monitor
             CompositeConfiguration compositeConfiguration = Environment.getInstance().getConfiguration(getPrefix(), getId());
             Configuration config = new ConfigConfigurationAdapter(this);
             if (Environment.getInstance().isConfigCenterFirst()) {
@@ -565,14 +567,17 @@ public abstract class AbstractConfig implements Serializable {
                 compositeConfiguration.addConfiguration(2, config);
             }
 
-            // loop methods, get override value and set the new value back to method
+			// 获取AbstractConfig子类的方法
             Method[] methods = getClass().getMethods();
             for (Method method : methods) {
+				// 使用反射的形式，找到setter方法，setter进去
                 if (MethodUtils.isSetter(method)) {
                     try {
+						// 获取需要设置的属性值，先剥离出setter的属性值，然后从compositeConfiguration中取出来
                         String value = StringUtils.trim(compositeConfiguration.getString(extractPropertyName(getClass(), method)));
-                        // isTypeMatch() is called to avoid duplicate and incorrect update, for example, we have two 'setGeneric' methods in ReferenceConfig.
+						// 对属性值进行数据和类型的校验
                         if (StringUtils.isNotEmpty(value) && ClassUtils.isTypeMatch(method.getParameterTypes()[0], value)) {
+							// 反射调用setter方法，完成赋值行为
                             method.invoke(this, ClassUtils.convertPrimitive(method.getParameterTypes()[0], value));
                         }
                     } catch (NoSuchMethodException e) {

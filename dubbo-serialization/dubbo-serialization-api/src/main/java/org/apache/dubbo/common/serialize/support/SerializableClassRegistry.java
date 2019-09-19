@@ -24,6 +24,9 @@ import java.util.Map;
 /**
  * Provide a unified serialization registry, this class used for {@code dubbo-serialization-fst}
  * and {@code dubbo-serialization-kryo}, it will register some classes at startup time (for example {@link AbstractKryoFactory#create})
+ * 提供一个统一的序列化注册器，
+ * 会在启动时注册一些类
+ * 使用LinkedHashMap存储需要序列化的类
  */
 public abstract class SerializableClassRegistry {
 

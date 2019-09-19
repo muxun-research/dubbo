@@ -30,19 +30,19 @@ import java.util.stream.Collectors;
 import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
 import static org.apache.dubbo.common.constants.CommonConstants.CLASSIFIER_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
+import static org.apache.dubbo.common.constants.CommonConstants.DUBBO_PROTOCOL;
 import static org.apache.dubbo.common.constants.CommonConstants.ENABLED_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.HOST_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.PASSWORD_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.PORT_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PROTOCOL_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.REGISTRY_SPLIT_PATTERN;
 import static org.apache.dubbo.common.constants.CommonConstants.REMOVE_VALUE_PREFIX;
-import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.DUBBO_PROTOCOL;
-import static org.apache.dubbo.common.constants.CommonConstants.HOST_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PASSWORD_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.PORT_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.USERNAME_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.CONFIGURATORS_CATEGORY;
 import static org.apache.dubbo.common.constants.RegistryConstants.DEFAULT_CATEGORY;
@@ -64,7 +64,9 @@ public class UrlUtils {
             return null;
         }
         String url;
+		// 如果URL中包含"://"或者"?"
         if (address.contains("://") || address.contains(URL_PARAM_STARTING_SYMBOL)) {
+			// address即为url
             url = address;
         } else {
             String[] addresses = COMMA_SPLIT_PATTERN.split(address);
@@ -80,7 +82,9 @@ public class UrlUtils {
                 url += URL_PARAM_STARTING_SYMBOL + RemotingConstants.BACKUP_KEY + "=" + backup.toString();
             }
         }
+		// 获取协议
         String defaultProtocol = defaults == null ? null : defaults.get(PROTOCOL_KEY);
+		// 获取一些属性，并将属性从parameters中移除
         if (defaultProtocol == null || defaultProtocol.length() == 0) {
             defaultProtocol = DUBBO_PROTOCOL;
         }
@@ -122,6 +126,8 @@ public class UrlUtils {
             changed = true;
             host = NetUtils.getLocalHost();
         }*/
+		// 这里的端口指的的dubbo和注册中心的通讯端口，并非是消费者的端口
+		// 默认dubbo开启9090端口
         if (port <= 0) {
             if (defaultPort > 0) {
                 changed = true;
@@ -150,6 +156,8 @@ public class UrlUtils {
                 }
             }
         }
+		// 由于在系统运行过程中，可能会发生属性变更的情况，所以在属性发生变更的情况下，才重新生成url
+		// 示例：spring-cloud://localhost:9090/org.apache.dubbo.registry.RegistryService?application=dubbo-client-second&dubbo=2.0.2&pid=3363&qos.enable=false&release=2.7.3&timestamp=1568864352047
         if (changed) {
             u = new URL(protocol, username, password, host, port, path, parameters);
         }

@@ -30,17 +30,45 @@ import java.lang.annotation.Target;
 @Target({ElementType.METHOD})
 public @interface Parameter {
 
-    String key() default "";
+	/**
+	 * key，键名
+	 * 例如C
+	 * @return
+	 */
+	String key() default "";
 
-    boolean required() default false;
+	/**
+	 * 是否必填
+	 * 默认false
+	 * @return
+	 */
+	boolean required() default false;
 
+	/**
+	 * 是否例外
+	 * @return
+	 */
     boolean excluded() default false;
 
-    boolean escaped() default false;
+	/**
+	 * 是否包含
+	 * @return
+	 */
+	boolean escaped() default false;
 
-    boolean attribute() default false;
+	/**
+	 * 是否为属性
+	 * @return
+	 */
+	boolean attribute() default false;
 
-    boolean append() default false;
+	/**
+	 * 是否拼接默认属性
+	 * 例如：ServiceConfig和ProviderConfig都继承自AbstractServiceConfig，所以ServiceConfig会继承ServiceConfig的值
+	 * 如果ProviderConfig.filter=firstFilter，ServiceConfig.filter=secondFilter，最终暴露到dubbo url时service.filter=firstFilter,secondFilter
+	 * @return
+	 */
+	boolean append() default false;
 
     /**
      * if {@link #key()} is specified, it will be used as the key for the annotated property when generating url.
@@ -54,8 +82,9 @@ public @interface Parameter {
      *      public getItem();
      *  }
      * }
-     *
+	 *
      * </pre>
+	 *
      */
     boolean useKeyAsProperty() default true;
 

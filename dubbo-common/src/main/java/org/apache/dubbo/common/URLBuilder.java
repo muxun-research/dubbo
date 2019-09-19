@@ -235,7 +235,7 @@ public final class URLBuilder {
         if (StringUtils.isEmpty(key) || StringUtils.isEmpty(value)) {
             return this;
         }
-        // if value doesn't change, return immediately
+		// 如果值没有发生变化，就无需修改
         if (value.equals(parameters.get(key))) { // value != null
             return this;
         }
