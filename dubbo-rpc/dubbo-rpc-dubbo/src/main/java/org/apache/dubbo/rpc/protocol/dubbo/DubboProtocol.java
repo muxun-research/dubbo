@@ -113,99 +113,105 @@ public class DubboProtocol extends AbstractProtocol {
      */
     private final ConcurrentMap<String, String> stubServiceMethodsMap = new ConcurrentHashMap<>();
 
-    private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
+	/**
+	 * dubbo自己实现的ExchangeHandler
+	 */
+	private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
 
-        @Override
-        public CompletableFuture<Object> reply(ExchangeChannel channel, Object message) throws RemotingException {
+		/**
+		 * 处理消费者远程调用
+		 */
+		@Override
+		public CompletableFuture<Object> reply(ExchangeChannel channel, Object message) throws RemotingException {
+			// message类型异常
+			if (!(message instanceof Invocation)) {
+				throw new RemotingException(channel, "Unsupported request: "
+						+ (message == null ? null : (message.getClass().getName() + ": " + message))
+						+ ", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress());
+			}
 
-            if (!(message instanceof Invocation)) {
-                throw new RemotingException(channel, "Unsupported request: "
-                        + (message == null ? null : (message.getClass().getName() + ": " + message))
-                        + ", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress());
-            }
+			Invocation inv = (Invocation) message;
+			Invoker<?> invoker = getInvoker(channel, inv);
+			// need to consider backward-compatibility if it's a callback
+			if (Boolean.TRUE.toString().equals(inv.getAttachments().get(IS_CALLBACK_SERVICE_INVOKE))) {
+				String methodsStr = invoker.getUrl().getParameters().get("methods");
+				boolean hasMethod = false;
+				if (methodsStr == null || !methodsStr.contains(",")) {
+					hasMethod = inv.getMethodName().equals(methodsStr);
+				} else {
+					String[] methods = methodsStr.split(",");
+					for (String method : methods) {
+						if (inv.getMethodName().equals(method)) {
+							hasMethod = true;
+							break;
+						}
+					}
+				}
+				if (!hasMethod) {
+					logger.warn(new IllegalStateException("The methodName " + inv.getMethodName()
+							+ " not found in callback service interface ,invoke will be ignored."
+							+ " please update the api interface. url is:"
+							+ invoker.getUrl()) + " ,invocation is :" + inv);
+					return null;
+				}
+			}
+			RpcContext.getContext().setRemoteAddress(channel.getRemoteAddress());
+			Result result = invoker.invoke(inv);
+			return result.completionFuture().thenApply(Function.identity());
+		}
 
-            Invocation inv = (Invocation) message;
-            Invoker<?> invoker = getInvoker(channel, inv);
-            // need to consider backward-compatibility if it's a callback
-            if (Boolean.TRUE.toString().equals(inv.getAttachments().get(IS_CALLBACK_SERVICE_INVOKE))) {
-                String methodsStr = invoker.getUrl().getParameters().get("methods");
-                boolean hasMethod = false;
-                if (methodsStr == null || !methodsStr.contains(",")) {
-                    hasMethod = inv.getMethodName().equals(methodsStr);
-                } else {
-                    String[] methods = methodsStr.split(",");
-                    for (String method : methods) {
-                        if (inv.getMethodName().equals(method)) {
-                            hasMethod = true;
-                            break;
-                        }
-                    }
-                }
-                if (!hasMethod) {
-                    logger.warn(new IllegalStateException("The methodName " + inv.getMethodName()
-                            + " not found in callback service interface ,invoke will be ignored."
-                            + " please update the api interface. url is:"
-                            + invoker.getUrl()) + " ,invocation is :" + inv);
-                    return null;
-                }
-            }
-            RpcContext.getContext().setRemoteAddress(channel.getRemoteAddress());
-            Result result = invoker.invoke(inv);
-            return result.completionFuture().thenApply(Function.identity());
-        }
+		@Override
+		public void received(Channel channel, Object message) throws RemotingException {
+			if (message instanceof Invocation) {
+				reply((ExchangeChannel) channel, message);
 
-        @Override
-        public void received(Channel channel, Object message) throws RemotingException {
-            if (message instanceof Invocation) {
-                reply((ExchangeChannel) channel, message);
+			} else {
+				super.received(channel, message);
+			}
+		}
 
-            } else {
-                super.received(channel, message);
-            }
-        }
+		@Override
+		public void connected(Channel channel) throws RemotingException {
+			invoke(channel, ON_CONNECT_KEY);
+		}
 
-        @Override
-        public void connected(Channel channel) throws RemotingException {
-            invoke(channel, ON_CONNECT_KEY);
-        }
+		@Override
+		public void disconnected(Channel channel) throws RemotingException {
+			if (logger.isDebugEnabled()) {
+				logger.debug("disconnected from " + channel.getRemoteAddress() + ",url:" + channel.getUrl());
+			}
+			invoke(channel, ON_DISCONNECT_KEY);
+		}
 
-        @Override
-        public void disconnected(Channel channel) throws RemotingException {
-            if (logger.isDebugEnabled()) {
-                logger.debug("disconnected from " + channel.getRemoteAddress() + ",url:" + channel.getUrl());
-            }
-            invoke(channel, ON_DISCONNECT_KEY);
-        }
+		private void invoke(Channel channel, String methodKey) {
+			Invocation invocation = createInvocation(channel, channel.getUrl(), methodKey);
+			if (invocation != null) {
+				try {
+					received(channel, invocation);
+				} catch (Throwable t) {
+					logger.warn("Failed to invoke event method " + invocation.getMethodName() + "(), cause: " + t.getMessage(), t);
+				}
+			}
+		}
 
-        private void invoke(Channel channel, String methodKey) {
-            Invocation invocation = createInvocation(channel, channel.getUrl(), methodKey);
-            if (invocation != null) {
-                try {
-                    received(channel, invocation);
-                } catch (Throwable t) {
-                    logger.warn("Failed to invoke event method " + invocation.getMethodName() + "(), cause: " + t.getMessage(), t);
-                }
-            }
-        }
+		private Invocation createInvocation(Channel channel, URL url, String methodKey) {
+			String method = url.getParameter(methodKey);
+			if (method == null || method.length() == 0) {
+				return null;
+			}
 
-        private Invocation createInvocation(Channel channel, URL url, String methodKey) {
-            String method = url.getParameter(methodKey);
-            if (method == null || method.length() == 0) {
-                return null;
-            }
+			RpcInvocation invocation = new RpcInvocation(method, new Class<?>[0], new Object[0]);
+			invocation.setAttachment(PATH_KEY, url.getPath());
+			invocation.setAttachment(GROUP_KEY, url.getParameter(GROUP_KEY));
+			invocation.setAttachment(INTERFACE_KEY, url.getParameter(INTERFACE_KEY));
+			invocation.setAttachment(VERSION_KEY, url.getParameter(VERSION_KEY));
+			if (url.getParameter(STUB_EVENT_KEY, false)) {
+				invocation.setAttachment(STUB_EVENT_KEY, Boolean.TRUE.toString());
+			}
 
-            RpcInvocation invocation = new RpcInvocation(method, new Class<?>[0], new Object[0]);
-            invocation.setAttachment(PATH_KEY, url.getPath());
-            invocation.setAttachment(GROUP_KEY, url.getParameter(GROUP_KEY));
-            invocation.setAttachment(INTERFACE_KEY, url.getParameter(INTERFACE_KEY));
-            invocation.setAttachment(VERSION_KEY, url.getParameter(VERSION_KEY));
-            if (url.getParameter(STUB_EVENT_KEY, false)) {
-                invocation.setAttachment(STUB_EVENT_KEY, Boolean.TRUE.toString());
-            }
-
-            return invocation;
-        }
-    };
+			return invocation;
+		}
+	};
 
     public DubboProtocol() {
         INSTANCE = this;
