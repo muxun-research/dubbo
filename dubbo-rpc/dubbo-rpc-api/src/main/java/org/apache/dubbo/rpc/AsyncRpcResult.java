@@ -25,9 +25,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
 /**
- * This class represents an unfinished RPC call, it will hold some context information for this call, for example RpcContext and Invocation,
- * so that when the call finishes and the result returns, it can guarantee all the contexts being recovered as the same as when the call was made
- * before any callback is invoked.
+ * 用于代表一个未完成的RPC调用，会存储一些调用过程中的上下文信息，比如：RpcContext、Invocation
+ * 所以在调用结束，返回结果时，我们还是会获取和调用前相同的上下文信息
  * <p>
  * TODO if it's reasonable or even right to keep a reference to Invocation?
  * <p>

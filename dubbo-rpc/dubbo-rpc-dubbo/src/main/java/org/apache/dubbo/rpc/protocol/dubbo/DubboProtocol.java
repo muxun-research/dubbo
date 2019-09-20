@@ -131,14 +131,19 @@ public class DubboProtocol extends AbstractProtocol {
 			}
 
 			Invocation inv = (Invocation) message;
+			// 获取invoker
 			Invoker<?> invoker = getInvoker(channel, inv);
-			// need to consider backward-compatibility if it's a callback
+			// 需要兼容之前的版本
 			if (Boolean.TRUE.toString().equals(inv.getAttachments().get(IS_CALLBACK_SERVICE_INVOKE))) {
+				// 获取方法
 				String methodsStr = invoker.getUrl().getParameters().get("methods");
 				boolean hasMethod = false;
+				// 如果url中没有方法名称
 				if (methodsStr == null || !methodsStr.contains(",")) {
+					// 判断
 					hasMethod = inv.getMethodName().equals(methodsStr);
 				} else {
+					// 存在多个调用方法，
 					String[] methods = methodsStr.split(",");
 					for (String method : methods) {
 						if (inv.getMethodName().equals(method)) {
@@ -246,35 +251,43 @@ public class DubboProtocol extends AbstractProtocol {
                         .equals(NetUtils.filterLocalHost(address.getAddress().getHostAddress()));
     }
 
-    Invoker<?> getInvoker(Channel channel, Invocation inv) throws RemotingException {
-        boolean isCallBackServiceInvoke = false;
-        boolean isStubServiceInvoke = false;
-        int port = channel.getLocalAddress().getPort();
-        String path = inv.getAttachments().get(PATH_KEY);
+	/**
+	 * 获取调用Invoker
+	 */
+	Invoker<?> getInvoker(Channel channel, Invocation inv) throws RemotingException {
+		// 是否需要进行回调
+		boolean isCallBackServiceInvoke = false;
+		// 是否需要进行本地存储
+		boolean isStubServiceInvoke = false;
+		// 获取本地请求的地址
+		int port = channel.getLocalAddress().getPort();
+		//
+		String path = inv.getAttachments().get(PATH_KEY);
 
-        // if it's callback service on client side
-        isStubServiceInvoke = Boolean.TRUE.toString().equals(inv.getAttachments().get(STUB_EVENT_KEY));
-        if (isStubServiceInvoke) {
-            port = channel.getRemoteAddress().getPort();
-        }
+		// if it's callback service on client side
+		isStubServiceInvoke = Boolean.TRUE.toString().equals(inv.getAttachments().get(STUB_EVENT_KEY));
+		if (isStubServiceInvoke) {
+			port = channel.getRemoteAddress().getPort();
+		}
 
-        //callback
-        isCallBackServiceInvoke = isClientSide(channel) && !isStubServiceInvoke;
-        if (isCallBackServiceInvoke) {
-            path += "." + inv.getAttachments().get(CALLBACK_SERVICE_KEY);
-            inv.getAttachments().put(IS_CALLBACK_SERVICE_INVOKE, Boolean.TRUE.toString());
-        }
+		//callback
+		isCallBackServiceInvoke = isClientSide(channel) && !isStubServiceInvoke;
+		if (isCallBackServiceInvoke) {
+			path += "." + inv.getAttachments().get(CALLBACK_SERVICE_KEY);
+			inv.getAttachments().put(IS_CALLBACK_SERVICE_INVOKE, Boolean.TRUE.toString());
+		}
+		// 获取服务key
+		String serviceKey = serviceKey(port, path, inv.getAttachments().get(VERSION_KEY), inv.getAttachments().get(GROUP_KEY));
+		// 从缓存的exporterMap中获取key
+		DubboExporter<?> exporter = (DubboExporter<?>) exporterMap.get(serviceKey);
 
-        String serviceKey = serviceKey(port, path, inv.getAttachments().get(VERSION_KEY), inv.getAttachments().get(GROUP_KEY));
-        DubboExporter<?> exporter = (DubboExporter<?>) exporterMap.get(serviceKey);
-
-        if (exporter == null) {
-            throw new RemotingException(channel, "Not found exported service: " + serviceKey + " in " + exporterMap.keySet() + ", may be version or group mismatch " +
-                    ", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress() + ", message:" + inv);
-        }
-
-        return exporter.getInvoker();
-    }
+		if (exporter == null) {
+			throw new RemotingException(channel, "Not found exported service: " + serviceKey + " in " + exporterMap.keySet() + ", may be version or group mismatch " +
+					", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress() + ", message:" + inv);
+		}
+		// DubboExporter中获取invoker
+		return exporter.getInvoker();
+	}
 
     public Collection<Invoker<?>> getInvokers() {
         return Collections.unmodifiableCollection(invokers);

@@ -191,13 +191,18 @@ public class RpcUtils {
         return $INVOKE_ASYNC.equals(inv.getMethodName());
     }
 
-    public static boolean isOneway(URL url, Invocation inv) {
-        boolean isOneway;
-        if (Boolean.FALSE.toString().equals(inv.getAttachment(RETURN_KEY))) {
-            isOneway = true;
-        } else {
-            isOneway = !url.getMethodParameter(getMethodName(inv), RETURN_KEY, true);
-        }
-        return isOneway;
-    }
+	/**
+	 * 判断是否是单向的调用
+	 */
+	public static boolean isOneway(URL url, Invocation inv) {
+		boolean isOneway;
+		// 如果调用是没有返回值的，则视为单向调用
+		if (Boolean.FALSE.toString().equals(inv.getAttachment(RETURN_KEY))) {
+			isOneway = true;
+		} else {
+			// 判断url中这个方法是否有返回值
+			isOneway = !url.getMethodParameter(getMethodName(inv), RETURN_KEY, true);
+		}
+		return isOneway;
+	}
 }

@@ -38,6 +38,8 @@ import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_RETRIES;
 import static org.apache.dubbo.rpc.cluster.Constants.RETRIES_KEY;
 
 /**
+ * 当调用失败时，记录错误信息，并尝试重试其他invoker
+ * 尝试重试n次，代表有n种不同的invoker
  * When invoke fails, log the initial error and retry other invokers (retry n times, which means at most n different invokers will be invoked)
  * Note that retry causes latency.
  * <p>

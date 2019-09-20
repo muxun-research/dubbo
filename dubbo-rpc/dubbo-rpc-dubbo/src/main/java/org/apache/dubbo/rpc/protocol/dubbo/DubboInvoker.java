@@ -75,10 +75,16 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
     @Override
     protected Result doInvoke(final Invocation invocation) throws Throwable {
         RpcInvocation inv = (RpcInvocation) invocation;
+		// 获得需要调用的方法名称
         final String methodName = RpcUtils.getMethodName(invocation);
+		// 获取服务名和版本号
+		// 示例：com.sunshine.service.spring.cloud.alibaba.laboratory.dubbo.api.service.SunshineService
+		// 服务版本号，默认0.0.0
         inv.setAttachment(PATH_KEY, getUrl().getPath());
         inv.setAttachment(VERSION_KEY, version);
-
+		// 在@Reference初始化时，我们已经将生成的ReferenceCountExchangeClient放入到了exchangeClients数组中
+		// 如果仅有一个，就使用这个exchangeClient
+		// 如果有多个，采用伪round-robin的形式获取
         ExchangeClient currentClient;
         if (clients.length == 1) {
             currentClient = clients[0];
@@ -86,17 +92,23 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
             currentClient = clients[index.getAndIncrement() % clients.length];
         }
         try {
+			// 判断是否是单向调用
             boolean isOneway = RpcUtils.isOneway(getUrl(), invocation);
+			// 获得请求的默认超时时间
             int timeout = getUrl().getMethodPositiveParameter(methodName, TIMEOUT_KEY, DEFAULT_TIMEOUT);
             if (isOneway) {
                 boolean isSent = getUrl().getMethodParameter(methodName, Constants.SENT_KEY, false);
                 currentClient.send(inv, isSent);
                 return AsyncRpcResult.newDefaultAsyncResult(invocation);
             } else {
+				// 创建一个请求结果
                 AsyncRpcResult asyncRpcResult = new AsyncRpcResult(inv);
+				// 请求，并获取对应的Future对象
                 CompletableFuture<Object> responseFuture = currentClient.request(inv, timeout);
+				// 订阅请求完成事件
                 asyncRpcResult.subscribeTo(responseFuture);
                 // save for 2.6.x compatibility, for example, TraceFilter in Zipkin uses com.alibaba.xxx.FutureAdapter
+				// 适配2.6.x版本，比如Zipkin中的TraceFilter需要使用FutureAdapter
                 FutureContext.getContext().setCompatibleFuture(responseFuture);
                 return asyncRpcResult;
             }
