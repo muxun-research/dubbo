@@ -22,37 +22,36 @@ import org.apache.dubbo.common.extension.SPI;
 
 /**
  * Transporter. (SPI, Singleton, ThreadSafe)
+ * 网络传输接口，SPI加载，线程安全
+ * SPI版本为Netty3
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Transport_Layer">Transport Layer</a>
  * <a href="http://en.wikipedia.org/wiki/Client%E2%80%93server_model">Client/Server</a>
- *
  * @see org.apache.dubbo.remoting.Transporters
  */
 @SPI("netty")
 public interface Transporter {
 
-    /**
-     * Bind a server.
-     *
-     * @param url     server url
-     * @param handler
-     * @return server
-     * @throws RemotingException
-     * @see org.apache.dubbo.remoting.Transporters#bind(URL, ChannelHandler...)
-     */
-    @Adaptive({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})
-    Server bind(URL url, ChannelHandler handler) throws RemotingException;
+	/**
+	 * 绑定一个服务器
+	 * @param url     服务器URL
+	 * @param handler Channel处理器
+	 * @return server 绑定的服务器
+	 * @throws RemotingException
+	 * @see org.apache.dubbo.remoting.Transporters#bind(URL, ChannelHandler...)
+	 */
+	@Adaptive({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})
+	Server bind(URL url, ChannelHandler handler) throws RemotingException;
 
-    /**
-     * Connect to a server.
-     *
-     * @param url     server url
-     * @param handler
-     * @return client
-     * @throws RemotingException
-     * @see org.apache.dubbo.remoting.Transporters#connect(URL, ChannelHandler...)
-     */
-    @Adaptive({Constants.CLIENT_KEY, Constants.TRANSPORTER_KEY})
-    Client connect(URL url, ChannelHandler handler) throws RemotingException;
+	/**
+	 * 连接指定服务器
+	 * @param url     服务器URL
+	 * @param handler Channel处理器
+	 * @return client 产生连接的客户端
+	 * @throws RemotingException
+	 * @see org.apache.dubbo.remoting.Transporters#connect(URL, ChannelHandler...)
+	 */
+	@Adaptive({Constants.CLIENT_KEY, Constants.TRANSPORTER_KEY})
+	Client connect(URL url, ChannelHandler handler) throws RemotingException;
 
 }

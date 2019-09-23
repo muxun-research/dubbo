@@ -35,86 +35,91 @@ import java.util.concurrent.Executors;
 import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER_SIDE;
 import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
 
+/**
+ * 包装后的ChannelHandler
+ */
 public class WrappedChannelHandler implements ChannelHandlerDelegate {
 
-    protected static final Logger logger = LoggerFactory.getLogger(WrappedChannelHandler.class);
+	protected static final Logger logger = LoggerFactory.getLogger(WrappedChannelHandler.class);
 
-    protected static final ExecutorService SHARED_EXECUTOR = Executors.newCachedThreadPool(new NamedThreadFactory("DubboSharedHandler", true));
+	protected static final ExecutorService SHARED_EXECUTOR = Executors.newCachedThreadPool(new NamedThreadFactory("DubboSharedHandler", true));
 
-    protected final ExecutorService executor;
+	protected final ExecutorService executor;
 
-    protected final ChannelHandler handler;
+	protected final ChannelHandler handler;
 
-    protected final URL url;
+	protected final URL url;
 
-    public WrappedChannelHandler(ChannelHandler handler, URL url) {
-        this.handler = handler;
-        this.url = url;
-        executor = (ExecutorService) ExtensionLoader.getExtensionLoader(ThreadPool.class).getAdaptiveExtension().getExecutor(url);
+	public WrappedChannelHandler(ChannelHandler handler, URL url) {
+		this.handler = handler;
+		this.url = url;
+		// 创建Worker线程池
+		executor = (ExecutorService) ExtensionLoader.getExtensionLoader(ThreadPool.class).getAdaptiveExtension().getExecutor(url);
+		// 添加线程池到DataStore中，Client会从DataStore获取Worker线程池
+		String componentKey = Constants.EXECUTOR_SERVICE_COMPONENT_KEY;
+		if (CONSUMER_SIDE.equalsIgnoreCase(url.getParameter(SIDE_KEY))) {
+			componentKey = CONSUMER_SIDE;
+		}
+		DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();
+		dataStore.put(componentKey, Integer.toString(url.getPort()), executor);
+	}
 
-        String componentKey = Constants.EXECUTOR_SERVICE_COMPONENT_KEY;
-        if (CONSUMER_SIDE.equalsIgnoreCase(url.getParameter(SIDE_KEY))) {
-            componentKey = CONSUMER_SIDE;
-        }
-        DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();
-        dataStore.put(componentKey, Integer.toString(url.getPort()), executor);
-    }
+	public void close() {
+		try {
+			if (executor != null) {
+				executor.shutdown();
+			}
+		} catch (Throwable t) {
+			logger.warn("fail to destroy thread pool of server: " + t.getMessage(), t);
+		}
+	}
 
-    public void close() {
-        try {
-            if (executor != null) {
-                executor.shutdown();
-            }
-        } catch (Throwable t) {
-            logger.warn("fail to destroy thread pool of server: " + t.getMessage(), t);
-        }
-    }
+	@Override
+	public void connected(Channel channel) throws RemotingException {
+		handler.connected(channel);
+	}
 
-    @Override
-    public void connected(Channel channel) throws RemotingException {
-        handler.connected(channel);
-    }
+	@Override
+	public void disconnected(Channel channel) throws RemotingException {
+		handler.disconnected(channel);
+	}
 
-    @Override
-    public void disconnected(Channel channel) throws RemotingException {
-        handler.disconnected(channel);
-    }
+	@Override
+	public void sent(Channel channel, Object message) throws RemotingException {
+		handler.sent(channel, message);
+	}
 
-    @Override
-    public void sent(Channel channel, Object message) throws RemotingException {
-        handler.sent(channel, message);
-    }
+	@Override
+	public void received(Channel channel, Object message) throws RemotingException {
+		handler.received(channel, message);
+	}
 
-    @Override
-    public void received(Channel channel, Object message) throws RemotingException {
-        handler.received(channel, message);
-    }
+	@Override
+	public void caught(Channel channel, Throwable exception) throws RemotingException {
+		handler.caught(channel, exception);
+	}
 
-    @Override
-    public void caught(Channel channel, Throwable exception) throws RemotingException {
-        handler.caught(channel, exception);
-    }
+	public ExecutorService getExecutor() {
+		return executor;
+	}
 
-    public ExecutorService getExecutor() {
-        return executor;
-    }
+	@Override
+	public ChannelHandler getHandler() {
+		if (handler instanceof ChannelHandlerDelegate) {
+			return ((ChannelHandlerDelegate) handler).getHandler();
+		} else {
+			return handler;
+		}
+	}
 
-    @Override
-    public ChannelHandler getHandler() {
-        if (handler instanceof ChannelHandlerDelegate) {
-            return ((ChannelHandlerDelegate) handler).getHandler();
-        } else {
-            return handler;
-        }
-    }
+	public URL getUrl() {
+		return url;
+	}
 
-    public URL getUrl() {
-        return url;
-    }
-
-    public ExecutorService getExecutorService() {
-        return executor == null || executor.isShutdown() ? SHARED_EXECUTOR : executor;
-    }
+	public ExecutorService getExecutorService() {
+		// 如果Worker线程池被回收，或者Worker线程池已经关闭，但是事件还没有处理完，会使用共享线程池处理剩下的事件
+		return executor == null || executor.isShutdown() ? SHARED_EXECUTOR : executor;
+	}
 
 
 }

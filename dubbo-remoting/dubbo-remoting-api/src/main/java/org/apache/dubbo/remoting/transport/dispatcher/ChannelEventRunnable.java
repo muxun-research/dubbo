@@ -54,6 +54,7 @@ public class ChannelEventRunnable implements Runnable {
     public void run() {
         if (state == ChannelState.RECEIVED) {
             try {
+				// 接收消息
                 handler.received(channel, message);
             } catch (Exception e) {
                 logger.warn("ChannelEventRunnable handle " + state + " operation error, channel is " + channel
@@ -77,6 +78,7 @@ public class ChannelEventRunnable implements Runnable {
                 break;
             case SENT:
                 try {
+					// 发送消息
                     handler.sent(channel, message);
                 } catch (Exception e) {
                     logger.warn("ChannelEventRunnable handle " + state + " operation error, channel is " + channel

@@ -30,14 +30,18 @@ public abstract class AbstractChannel extends AbstractPeer implements Channel {
         super(url, handler);
     }
 
-    @Override
-    public void send(Object message, boolean sent) throws RemotingException {
-        if (isClosed()) {
-            throw new RemotingException(this, "Failed to send message "
-                    + (message == null ? "" : message.getClass().getName()) + ":" + message
-                    + ", cause: Channel closed. channel: " + getLocalAddress() + " -> " + getRemoteAddress());
-        }
-    }
+	/**
+	 * 目前只做检查
+	 */
+	@Override
+	public void send(Object message, boolean sent) throws RemotingException {
+		// 由于继承自AbstractPeer，使用AbstractPeer#closed判断Channel是否关闭
+		if (isClosed()) {
+			throw new RemotingException(this, "Failed to send message "
+					+ (message == null ? "" : message.getClass().getName()) + ":" + message
+					+ ", cause: Channel closed. channel: " + getLocalAddress() + " -> " + getRemoteAddress());
+		}
+	}
 
     @Override
     public String toString() {

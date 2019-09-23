@@ -27,35 +27,40 @@ import org.apache.dubbo.remoting.buffer.ChannelBuffer;
 
 import java.io.IOException;
 
+/**
+ * Codec2的适配器，用于将Codec转换为Codec2
+ */
 public class CodecAdapter implements Codec2 {
 
-    private Codec codec;
+	private Codec codec;
 
-    public CodecAdapter(Codec codec) {
-        Assert.notNull(codec, "codec == null");
-        this.codec = codec;
-    }
+	public CodecAdapter(Codec codec) {
+		Assert.notNull(codec, "codec == null");
+		this.codec = codec;
+	}
 
-    @Override
-    public void encode(Channel channel, ChannelBuffer buffer, Object message)
-            throws IOException {
-        UnsafeByteArrayOutputStream os = new UnsafeByteArrayOutputStream(1024);
-        codec.encode(channel, os, message);
-        buffer.writeBytes(os.toByteArray());
-    }
+	@Override
+	public void encode(Channel channel, ChannelBuffer buffer, Object message)
+			throws IOException {
+		UnsafeByteArrayOutputStream os = new UnsafeByteArrayOutputStream(1024);
+		// 使用codec进行编码
+		codec.encode(channel, os, message);
+		buffer.writeBytes(os.toByteArray());
+	}
 
-    @Override
-    public Object decode(Channel channel, ChannelBuffer buffer) throws IOException {
-        byte[] bytes = new byte[buffer.readableBytes()];
-        int savedReaderIndex = buffer.readerIndex();
-        buffer.readBytes(bytes);
-        UnsafeByteArrayInputStream is = new UnsafeByteArrayInputStream(bytes);
-        Object result = codec.decode(channel, is);
-        buffer.readerIndex(savedReaderIndex + is.position());
-        return result == Codec.NEED_MORE_INPUT ? DecodeResult.NEED_MORE_INPUT : result;
-    }
+	@Override
+	public Object decode(Channel channel, ChannelBuffer buffer) throws IOException {
+		byte[] bytes = new byte[buffer.readableBytes()];
+		int savedReaderIndex = buffer.readerIndex();
+		buffer.readBytes(bytes);
+		UnsafeByteArrayInputStream is = new UnsafeByteArrayInputStream(bytes);
+		// 使用codec进行解码
+		Object result = codec.decode(channel, is);
+		buffer.readerIndex(savedReaderIndex + is.position());
+		return result == Codec.NEED_MORE_INPUT ? DecodeResult.NEED_MORE_INPUT : result;
+	}
 
-    public Codec getCodec() {
-        return codec;
-    }
+	public Codec getCodec() {
+		return codec;
+	}
 }

@@ -16,15 +16,14 @@
  */
 package org.apache.dubbo.remoting.transport.netty4;
 
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.transport.AbstractChannel;
-
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -39,209 +38,211 @@ import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
  */
 final class NettyChannel extends AbstractChannel {
 
-    private static final Logger logger = LoggerFactory.getLogger(NettyChannel.class);
-    /**
-     * the cache for netty channel and dubbo channel
-     */
-    private static final ConcurrentMap<Channel, NettyChannel> CHANNEL_MAP = new ConcurrentHashMap<Channel, NettyChannel>();
-    /**
-     * netty channel
-     */
-    private final Channel channel;
+	private static final Logger logger = LoggerFactory.getLogger(NettyChannel.class);
+	/**
+	 * 缓存一份Netty Channel和Dubbo Channel的数据
+	 */
+	private static final ConcurrentMap<Channel, NettyChannel> CHANNEL_MAP = new ConcurrentHashMap<Channel, NettyChannel>();
+	/**
+	 * netty channel
+	 */
+	private final Channel channel;
 
-    private final Map<String, Object> attributes = new ConcurrentHashMap<String, Object>();
-    /**
-     * The constructor of NettyChannel.
-     * It is private so NettyChannel usually create by {@link NettyChannel#getOrAddChannel(Channel, URL, ChannelHandler)}
-     *
-     * @param channel netty channel
-     * @param url
-     * @param handler dubbo handler that contain netty handler
-     */
-    private NettyChannel(Channel channel, URL url, ChannelHandler handler) {
-        super(url, handler);
-        if (channel == null) {
-            throw new IllegalArgumentException("netty channel == null;");
-        }
-        this.channel = channel;
-    }
-    /**
-     * Get dubbo channel by netty channel through channel cache.
-     * Put netty channel into it if dubbo channel don't exist in the cache.
-     *
-     * @param ch netty channel
-     * @param url
-     * @param handler dubbo handler that contain netty's handler
-     * @return
-     */
-    static NettyChannel getOrAddChannel(Channel ch, URL url, ChannelHandler handler) {
-        if (ch == null) {
-            return null;
-        }
-        NettyChannel ret = CHANNEL_MAP.get(ch);
-        if (ret == null) {
-            NettyChannel nettyChannel = new NettyChannel(ch, url, handler);
-            if (ch.isActive()) {
-                ret = CHANNEL_MAP.putIfAbsent(ch, nettyChannel);
-            }
-            if (ret == null) {
-                ret = nettyChannel;
-            }
-        }
-        return ret;
-    }
-    /**
-     * Remove the inactive channel.
-     *
-     * @param ch netty channel
-     */
-    static void removeChannelIfDisconnected(Channel ch) {
-        if (ch != null && !ch.isActive()) {
-            CHANNEL_MAP.remove(ch);
-        }
-    }
+	private final Map<String, Object> attributes = new ConcurrentHashMap<String, Object>();
 
-    @Override
-    public InetSocketAddress getLocalAddress() {
-        return (InetSocketAddress) channel.localAddress();
-    }
+	/**
+	 * The constructor of NettyChannel.
+	 * It is private so NettyChannel usually create by {@link NettyChannel#getOrAddChannel(Channel, URL, ChannelHandler)}
+	 * @param channel netty channel
+	 * @param url
+	 * @param handler dubbo handler that contain netty handler
+	 */
+	private NettyChannel(Channel channel, URL url, ChannelHandler handler) {
+		super(url, handler);
+		if (channel == null) {
+			throw new IllegalArgumentException("netty channel == null;");
+		}
+		this.channel = channel;
+	}
 
-    @Override
-    public InetSocketAddress getRemoteAddress() {
-        return (InetSocketAddress) channel.remoteAddress();
-    }
+	/**
+	 * Get dubbo channel by netty channel through channel cache.
+	 * Put netty channel into it if dubbo channel don't exist in the cache.
+	 * @param ch      netty channel
+	 * @param url
+	 * @param handler dubbo handler that contain netty's handler
+	 * @return
+	 */
+	static NettyChannel getOrAddChannel(Channel ch, URL url, ChannelHandler handler) {
+		if (ch == null) {
+			return null;
+		}
+		NettyChannel ret = CHANNEL_MAP.get(ch);
+		if (ret == null) {
+			NettyChannel nettyChannel = new NettyChannel(ch, url, handler);
+			if (ch.isActive()) {
+				ret = CHANNEL_MAP.putIfAbsent(ch, nettyChannel);
+			}
+			if (ret == null) {
+				ret = nettyChannel;
+			}
+		}
+		return ret;
+	}
 
-    @Override
-    public boolean isConnected() {
-        return !isClosed() && channel.isActive();
-    }
+	/**
+	 * Remove the inactive channel.
+	 * @param ch netty channel
+	 */
+	static void removeChannelIfDisconnected(Channel ch) {
+		if (ch != null && !ch.isActive()) {
+			CHANNEL_MAP.remove(ch);
+		}
+	}
 
-    /**
-     * Send message by netty and whether to wait the completion of the send.
-     *
-     * @param message message that need send.
-     * @param sent whether to ack async-sent
-     * @throws RemotingException throw RemotingException if wait until timeout or any exception thrown by method body that surrounded by try-catch.
-     */
-    @Override
-    public void send(Object message, boolean sent) throws RemotingException {
-        // whether the channel is closed
-        super.send(message, sent);
+	@Override
+	public InetSocketAddress getLocalAddress() {
+		return (InetSocketAddress) channel.localAddress();
+	}
 
-        boolean success = true;
-        int timeout = 0;
-        try {
-            ChannelFuture future = channel.writeAndFlush(message);
-            if (sent) {
-                // wait timeout ms
-                timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
-                success = future.await(timeout);
-            }
-            Throwable cause = future.cause();
-            if (cause != null) {
-                throw cause;
-            }
-        } catch (Throwable e) {
-            throw new RemotingException(this, "Failed to send message " + message + " to " + getRemoteAddress() + ", cause: " + e.getMessage(), e);
-        }
-        if (!success) {
-            throw new RemotingException(this, "Failed to send message " + message + " to " + getRemoteAddress()
-                    + "in timeout(" + timeout + "ms) limit");
-        }
-    }
+	@Override
+	public InetSocketAddress getRemoteAddress() {
+		return (InetSocketAddress) channel.remoteAddress();
+	}
 
-    @Override
-    public void close() {
-        try {
-            super.close();
-        } catch (Exception e) {
-            logger.warn(e.getMessage(), e);
-        }
-        try {
-            removeChannelIfDisconnected(channel);
-        } catch (Exception e) {
-            logger.warn(e.getMessage(), e);
-        }
-        try {
-            attributes.clear();
-        } catch (Exception e) {
-            logger.warn(e.getMessage(), e);
-        }
-        try {
-            if (logger.isInfoEnabled()) {
-                logger.info("Close netty channel " + channel);
-            }
-            channel.close();
-        } catch (Exception e) {
-            logger.warn(e.getMessage(), e);
-        }
-    }
+	@Override
+	public boolean isConnected() {
+		return !isClosed() && channel.isActive();
+	}
 
-    @Override
-    public boolean hasAttribute(String key) {
-        return attributes.containsKey(key);
-    }
+	/**
+	 * 使用Netty4发送消息，并判断是否需要等待发送完成
+	 * @param message 需要发送的消息
+	 * @param sent    是否对异步发送消息做出响应
+	 * @throws RemotingException throw RemotingException if wait until timeout or any exception thrown by method body that surrounded by try-catch.
+	 */
+	@Override
+	public void send(Object message, boolean sent) throws RemotingException {
+		// 调用AbstractChannel#send()判断Channel是否关闭
+		super.send(message, sent);
 
-    @Override
-    public Object getAttribute(String key) {
-        return attributes.get(key);
-    }
+		boolean success = true;
+		int timeout = 0;
+		try {
+			// 向通道写入
+			ChannelFuture future = channel.writeAndFlush(message);
+			if (sent) {
+				// 等待一定时间
+				timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
+				success = future.await(timeout);
+			}
+			// 抛出异常
+			Throwable cause = future.cause();
+			if (cause != null) {
+				throw cause;
+			}
+		} catch (Throwable e) {
+			throw new RemotingException(this, "Failed to send message " + message + " to " + getRemoteAddress() + ", cause: " + e.getMessage(), e);
+		}
+		// 如果没有发送成功，抛出异常
+		if (!success) {
+			throw new RemotingException(this, "Failed to send message " + message + " to " + getRemoteAddress()
+					+ "in timeout(" + timeout + "ms) limit");
+		}
+	}
 
-    @Override
-    public void setAttribute(String key, Object value) {
-        // The null value is unallowed in the ConcurrentHashMap.
-        if (value == null) {
-            attributes.remove(key);
-        } else {
-            attributes.put(key, value);
-        }
-    }
+	@Override
+	public void close() {
+		try {
+			super.close();
+		} catch (Exception e) {
+			logger.warn(e.getMessage(), e);
+		}
+		try {
+			removeChannelIfDisconnected(channel);
+		} catch (Exception e) {
+			logger.warn(e.getMessage(), e);
+		}
+		try {
+			attributes.clear();
+		} catch (Exception e) {
+			logger.warn(e.getMessage(), e);
+		}
+		try {
+			if (logger.isInfoEnabled()) {
+				logger.info("Close netty channel " + channel);
+			}
+			channel.close();
+		} catch (Exception e) {
+			logger.warn(e.getMessage(), e);
+		}
+	}
 
-    @Override
-    public void removeAttribute(String key) {
-        attributes.remove(key);
-    }
+	@Override
+	public boolean hasAttribute(String key) {
+		return attributes.containsKey(key);
+	}
 
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((channel == null) ? 0 : channel.hashCode());
-        return result;
-    }
+	@Override
+	public Object getAttribute(String key) {
+		return attributes.get(key);
+	}
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
+	@Override
+	public void setAttribute(String key, Object value) {
+		// The null value is unallowed in the ConcurrentHashMap.
+		if (value == null) {
+			attributes.remove(key);
+		} else {
+			attributes.put(key, value);
+		}
+	}
 
-        // FIXME: a hack to make org.apache.dubbo.remoting.exchange.support.DefaultFuture.closeChannel work
-        if (obj instanceof NettyClient) {
-            NettyClient client = (NettyClient) obj;
-            return channel.equals(client.getNettyChannel());
-        }
+	@Override
+	public void removeAttribute(String key) {
+		attributes.remove(key);
+	}
 
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        NettyChannel other = (NettyChannel) obj;
-        if (channel == null) {
-            if (other.channel != null) {
-                return false;
-            }
-        } else if (!channel.equals(other.channel)) {
-            return false;
-        }
-        return true;
-    }
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((channel == null) ? 0 : channel.hashCode());
+		return result;
+	}
 
-    @Override
-    public String toString() {
-        return "NettyChannel [channel=" + channel + "]";
-    }
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null) {
+			return false;
+		}
+
+		// FIXME: a hack to make org.apache.dubbo.remoting.exchange.support.DefaultFuture.closeChannel work
+		if (obj instanceof NettyClient) {
+			NettyClient client = (NettyClient) obj;
+			return channel.equals(client.getNettyChannel());
+		}
+
+		if (getClass() != obj.getClass()) {
+			return false;
+		}
+		NettyChannel other = (NettyChannel) obj;
+		if (channel == null) {
+			if (other.channel != null) {
+				return false;
+			}
+		} else if (!channel.equals(other.channel)) {
+			return false;
+		}
+		return true;
+	}
+
+	@Override
+	public String toString() {
+		return "NettyChannel [channel=" + channel + "]";
+	}
 
 }

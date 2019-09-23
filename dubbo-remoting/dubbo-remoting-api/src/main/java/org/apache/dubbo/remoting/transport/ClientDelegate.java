@@ -24,7 +24,9 @@ import org.apache.dubbo.remoting.RemotingException;
 import java.net.InetSocketAddress;
 
 /**
- * ClientDelegate
+ * Client的代理类
+ * 目前用处不大
+ * ChannelWrapper重写了所有方法，并且没有复用任何方法
  */
 public class ClientDelegate implements Client {
 

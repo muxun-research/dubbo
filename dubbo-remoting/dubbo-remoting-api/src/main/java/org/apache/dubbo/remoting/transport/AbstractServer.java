@@ -37,37 +37,57 @@ import java.util.concurrent.ThreadPoolExecutor;
 import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_VALUE;
 import static org.apache.dubbo.common.constants.CommonConstants.THREADS_KEY;
-import static org.apache.dubbo.remoting.Constants.IDLE_TIMEOUT_KEY;
-import static org.apache.dubbo.remoting.Constants.DEFAULT_IDLE_TIMEOUT;
 import static org.apache.dubbo.remoting.Constants.ACCEPTS_KEY;
 import static org.apache.dubbo.remoting.Constants.DEFAULT_ACCEPTS;
+import static org.apache.dubbo.remoting.Constants.DEFAULT_IDLE_TIMEOUT;
+import static org.apache.dubbo.remoting.Constants.IDLE_TIMEOUT_KEY;
 
 /**
+ * 抽象远程服务端
  * AbstractServer
  */
 public abstract class AbstractServer extends AbstractEndpoint implements Server {
 
     protected static final String SERVER_THREAD_POOL_NAME = "DubboServerHandler";
     private static final Logger logger = LoggerFactory.getLogger(AbstractServer.class);
-    ExecutorService executor;
-    private InetSocketAddress localAddress;
-    private InetSocketAddress bindAddress;
-    private int accepts;
-    private int idleTimeout;
+	/**
+	 * 线程池
+	 */
+	ExecutorService executor;
+	/**
+	 * 服务地址
+	 */
+	private InetSocketAddress localAddress;
+	/**
+	 * 绑定地址
+	 */
+	private InetSocketAddress bindAddress;
+	/**
+	 * 服务器最大可接受连接数
+	 */
+	private int accepts;
+	/**
+	 * 空闲超时时间
+	 */
+	private int idleTimeout;
 
     public AbstractServer(URL url, ChannelHandler handler) throws RemotingException {
         super(url, handler);
+		// 服务地址Socket
         localAddress = getUrl().toInetSocketAddress();
-
+		// 获取绑定的HOST和PORT
         String bindIp = getUrl().getParameter(Constants.BIND_IP_KEY, getUrl().getHost());
         int bindPort = getUrl().getParameter(Constants.BIND_PORT_KEY, getUrl().getPort());
         if (url.getParameter(ANYHOST_KEY, false) || NetUtils.isInvalidLocalHost(bindIp)) {
             bindIp = ANYHOST_VALUE;
         }
         bindAddress = new InetSocketAddress(bindIp, bindPort);
+		// 服务端最大可接受连接数，默认为0
         this.accepts = url.getParameter(ACCEPTS_KEY, DEFAULT_ACCEPTS);
+		// 服务端连接最大空闲等待时间，默认为600s
         this.idleTimeout = url.getParameter(IDLE_TIMEOUT_KEY, DEFAULT_IDLE_TIMEOUT);
-        try {
+		try {
+			// 创建连接
             doOpen();
             if (logger.isInfoEnabled()) {
                 logger.info("Start " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export " + getLocalAddress());
@@ -77,7 +97,10 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
                     + " on " + getLocalAddress() + ", cause: " + t.getMessage(), t);
         }
         //fixme replace this with better method
+		// 从DataStore中获取线程池
         DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();
+		// dataStore的实现是一个Map<?, Map<?, ?>>类型
+		// 获取对应的类型及端口的线程池
         executor = (ExecutorService) dataStore.get(Constants.EXECUTOR_SERVICE_COMPONENT_KEY, Integer.toString(url.getPort()));
     }
 
@@ -90,7 +113,8 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         if (url == null) {
             return;
         }
-        try {
+		try {
+			// 从URL中重新获取服务端最大可接受连接数
             if (url.hasParameter(ACCEPTS_KEY)) {
                 int a = url.getParameter(ACCEPTS_KEY, 0);
                 if (a > 0) {
@@ -100,7 +124,8 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         } catch (Throwable t) {
             logger.error(t.getMessage(), t);
         }
-        try {
+		try {
+			// 从URL中获取服务端连接的空间等待时间
             if (url.hasParameter(IDLE_TIMEOUT_KEY)) {
                 int t = url.getParameter(IDLE_TIMEOUT_KEY, 0);
                 if (t > 0) {
@@ -110,14 +135,19 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         } catch (Throwable t) {
             logger.error(t.getMessage(), t);
         }
-        try {
+		try {
+			// 从URL中重新获取线程的名称
             if (url.hasParameter(THREADS_KEY)
                     && executor instanceof ThreadPoolExecutor && !executor.isShutdown()) {
+				// 在线程池还没有停止的前提下，进行替换
                 ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;
                 int threads = url.getParameter(THREADS_KEY, 0);
+				// 获取原有线程池的核心信息
+				// 获取最大连接数和核心连接数
                 int max = threadPoolExecutor.getMaximumPoolSize();
                 int core = threadPoolExecutor.getCorePoolSize();
                 if (threads > 0 && (threads != max || threads != core)) {
+					// 重新设置线程池的核心信息
                     if (threads < core) {
                         threadPoolExecutor.setCorePoolSize(threads);
                         if (core == max) {
@@ -135,23 +165,28 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
             logger.error(t.getMessage(), t);
         }
         super.setUrl(getUrl().addParameters(url.getParameters()));
-    }
+	}
 
-    @Override
-    public void send(Object message, boolean sent) throws RemotingException {
-        Collection<Channel> channels = getChannels();
-        for (Channel channel : channels) {
-            if (channel.isConnected()) {
-                channel.send(message, sent);
-            }
-        }
-    }
+	/**
+	 * 服务端发送消息，需要遍历所有创建Channel
+	 */
+	@Override
+	public void send(Object message, boolean sent) throws RemotingException {
+		Collection<Channel> channels = getChannels();
+		for (Channel channel : channels) {
+			// 在Channel处于连接状态的情况下，发送消息
+			if (channel.isConnected()) {
+				channel.send(message, sent);
+			}
+		}
+	}
 
     @Override
     public void close() {
         if (logger.isInfoEnabled()) {
             logger.info("Close " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export " + getLocalAddress());
-        }
+		}
+		// 关闭连接池
         ExecutorUtil.shutdownNow(executor, 100);
         try {
             super.close();

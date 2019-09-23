@@ -27,12 +27,15 @@ import java.util.Collection;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
- * ChannelListenerDispatcher
+ * ChannelHandler调度器
+ * 目前主要用于dubbo-remoting-p2p中的AbstractGroup中
  */
 public class ChannelHandlerDispatcher implements ChannelHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(ChannelHandlerDispatcher.class);
-
+	/**
+	 * ChannelHandler集合
+	 */
     private final Collection<ChannelHandler> channelHandlers = new CopyOnWriteArraySet<ChannelHandler>();
 
     public ChannelHandlerDispatcher() {
@@ -64,6 +67,7 @@ public class ChannelHandlerDispatcher implements ChannelHandler {
 
     @Override
     public void connected(Channel channel) {
+		// 遍历ChannelHandler连接指定Channel
         for (ChannelHandler listener : channelHandlers) {
             try {
                 listener.connected(channel);
@@ -75,6 +79,7 @@ public class ChannelHandlerDispatcher implements ChannelHandler {
 
     @Override
     public void disconnected(Channel channel) {
+		// 遍历ChannelHandler断开连接指定Channel
         for (ChannelHandler listener : channelHandlers) {
             try {
                 listener.disconnected(channel);
@@ -86,6 +91,7 @@ public class ChannelHandlerDispatcher implements ChannelHandler {
 
     @Override
     public void sent(Channel channel, Object message) {
+		// 遍历ChannelHandler向指定Channel发送消息
         for (ChannelHandler listener : channelHandlers) {
             try {
                 listener.sent(channel, message);
@@ -97,6 +103,7 @@ public class ChannelHandlerDispatcher implements ChannelHandler {
 
     @Override
     public void received(Channel channel, Object message) {
+		// 遍历ChannelHandler接受指定的Channel的消息
         for (ChannelHandler listener : channelHandlers) {
             try {
                 listener.received(channel, message);
@@ -108,6 +115,7 @@ public class ChannelHandlerDispatcher implements ChannelHandler {
 
     @Override
     public void caught(Channel channel, Throwable exception) {
+		// 遍历ChannelHandler捕获指定渠道的异常
         for (ChannelHandler listener : channelHandlers) {
             try {
                 listener.caught(channel, exception);

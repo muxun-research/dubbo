@@ -16,6 +16,17 @@
  */
 package org.apache.dubbo.remoting.transport.netty4;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.proxy.Socks5ProxyHandler;
+import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.logger.Logger;
@@ -28,21 +39,9 @@ import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.transport.AbstractClient;
 import org.apache.dubbo.remoting.utils.UrlUtils;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.proxy.Socks5ProxyHandler;
-import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.concurrent.DefaultThreadFactory;
+import java.net.InetSocketAddress;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-
-import java.net.InetSocketAddress;
 
 /**
  * NettyClient.
@@ -81,8 +80,7 @@ public class NettyClient extends AbstractClient {
     }
 
     /**
-     * Init bootstrap
-     *
+	 * Netty启动器
      * @throws Throwable
      */
     @Override
@@ -121,15 +119,18 @@ public class NettyClient extends AbstractClient {
     @Override
     protected void doConnect() throws Throwable {
         long start = System.currentTimeMillis();
+		// doOpen()只是配置了group、option、handler
+		// 接下来需要连接指定服务端
         ChannelFuture future = bootstrap.connect(getConnectAddress());
         try {
             boolean ret = future.awaitUninterruptibly(getConnectTimeout(), MILLISECONDS);
-
+			// 如果在指定等待时间内成功返回，并且future的返回结果是true
             if (ret && future.isSuccess()) {
+				// 获取新的Channel
                 Channel newChannel = future.channel();
                 try {
-                    // Close old channel
-                    // copy reference
+					// 关闭旧的链接
+					// 获取旧的Channel采用拷贝引用的形式
                     Channel oldChannel = NettyClient.this.channel;
                     if (oldChannel != null) {
                         try {
@@ -142,6 +143,7 @@ public class NettyClient extends AbstractClient {
                         }
                     }
                 } finally {
+					// 如果当前客户端已经关闭，释放Channel
                     if (NettyClient.this.isClosed()) {
                         try {
                             if (logger.isInfoEnabled()) {
@@ -149,10 +151,13 @@ public class NettyClient extends AbstractClient {
                             }
                             newChannel.close();
                         } finally {
+							// 回收Channel
                             NettyClient.this.channel = null;
+							// 删除新Channel
                             NettyChannel.removeChannelIfDisconnected(newChannel);
                         }
                     } else {
+						// 如果新连接没有关闭，用新Channel替换旧Channel
                         NettyClient.this.channel = newChannel;
                     }
                 }
@@ -166,10 +171,9 @@ public class NettyClient extends AbstractClient {
                         + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion());
             }
         } finally {
-            // just add new valid channel to NettyChannel's cache
             if (!isConnected()) {
-                //future.cancel(true);
-            }
+
+			}
         }
     }
 

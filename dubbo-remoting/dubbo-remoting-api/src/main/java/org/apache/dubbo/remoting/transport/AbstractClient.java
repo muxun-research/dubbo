@@ -41,7 +41,8 @@ import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_CLIENT_T
 import static org.apache.dubbo.common.constants.CommonConstants.THREADPOOL_KEY;
 
 /**
- * AbstractClient
+ * 客户端抽象类
+ * 一个client也是一个端点
  */
 public abstract class AbstractClient extends AbstractEndpoint implements Client {
 
@@ -51,53 +52,64 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
     private final boolean needReconnect;
     protected volatile ExecutorService executor;
 
-    public AbstractClient(URL url, ChannelHandler handler) throws RemotingException {
-        super(url, handler);
+	/**
+	 * 池化Client
+	 * 比如初始化NettyClient时，就会调用这个方法
+	 */
+	public AbstractClient(URL url, ChannelHandler handler) throws RemotingException {
+		super(url, handler);
+		// 是否需要重连
+		needReconnect = url.getParameter(Constants.SEND_RECONNECT_KEY, false);
 
-        needReconnect = url.getParameter(Constants.SEND_RECONNECT_KEY, false);
-
-        try {
-            doOpen();
-        } catch (Throwable t) {
-            close();
-            throw new RemotingException(url.toInetSocketAddress(), null,
-                    "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
-                            + " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
-        }
-        try {
-            // connect.
-            connect();
-            if (logger.isInfoEnabled()) {
-                logger.info("Start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress() + " connect to the server " + getRemoteAddress());
-            }
-        } catch (RemotingException t) {
-            if (url.getParameter(Constants.CHECK_KEY, true)) {
-                close();
-                throw t;
-            } else {
-                logger.warn("Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
-                        + " connect to the server " + getRemoteAddress() + " (check == false, ignore and retry later!), cause: " + t.getMessage(), t);
-            }
-        } catch (Throwable t) {
-            close();
-            throw new RemotingException(url.toInetSocketAddress(), null,
-                    "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
-                            + " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
-        }
-
-        executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class)
-                .getDefaultExtension().get(CONSUMER_SIDE, Integer.toString(url.getPort()));
-        ExtensionLoader.getExtensionLoader(DataStore.class)
-                .getDefaultExtension().remove(CONSUMER_SIDE, Integer.toString(url.getPort()));
-    }
+		try {
+			// 打开连接设备
+			// 示例：Netty4将会启动Bootstrap
+			doOpen();
+		} catch (Throwable t) {
+			// 如果启动失败，执行关闭，并抛出异常
+			close();
+			throw new RemotingException(url.toInetSocketAddress(), null,
+					"Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+							+ " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
+		}
+		try {
+			// 连接指定的服务器
+			connect();
+			if (logger.isInfoEnabled()) {
+				logger.info("Start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress() + " connect to the server " + getRemoteAddress());
+			}
+		} catch (RemotingException t) {
+			if (url.getParameter(Constants.CHECK_KEY, true)) {
+				close();
+				throw t;
+			} else {
+				logger.warn("Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+						+ " connect to the server " + getRemoteAddress() + " (check == false, ignore and retry later!), cause: " + t.getMessage(), t);
+			}
+		} catch (Throwable t) {
+			close();
+			throw new RemotingException(url.toInetSocketAddress(), null,
+					"Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+							+ " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
+		}
+		// 获取消费者线程池
+		executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class)
+				.getDefaultExtension().get(CONSUMER_SIDE, Integer.toString(url.getPort()));
+		ExtensionLoader.getExtensionLoader(DataStore.class)
+				.getDefaultExtension().remove(CONSUMER_SIDE, Integer.toString(url.getPort()));
+	}
 
     protected static ChannelHandler wrapChannelHandler(URL url, ChannelHandler handler) {
+		// 设置线程池的名称，放入到URL中
         url = ExecutorUtil.setThreadName(url, CLIENT_THREAD_POOL_NAME);
+		// 设置使用的线程池类型
         url = url.addParameterIfAbsent(THREADPOOL_KEY, DEFAULT_CLIENT_THREADPOOL);
+		// 包装ChannelHandler
         return ChannelHandlers.wrap(handler, url);
     }
 
     public InetSocketAddress getConnectAddress() {
+		// 从URL中获取请求的host和port，创建Socket连接
         return new InetSocketAddress(NetUtils.filterLocalHost(getUrl().getHost()), getUrl().getPort());
     }
 
@@ -178,15 +190,15 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
     }
 
     protected void connect() throws RemotingException {
-
+		// 连接服务器时需要上锁
         connectLock.lock();
 
-        try {
-
+		try {
+			// 判断Channel是否处于连接状态
             if (isConnected()) {
                 return;
-            }
-
+			}
+			// 执行连接
             doConnect();
 
             if (!isConnected()) {
@@ -211,6 +223,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                     + ", cause: " + e.getMessage(), e);
 
         } finally {
+			// 释放锁
             connectLock.unlock();
         }
     }

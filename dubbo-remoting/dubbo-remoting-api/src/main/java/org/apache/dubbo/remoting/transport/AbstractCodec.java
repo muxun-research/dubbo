@@ -16,9 +16,6 @@
  */
 package org.apache.dubbo.remoting.transport;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
@@ -27,6 +24,9 @@ import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.Codec2;
 import org.apache.dubbo.remoting.Constants;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
 
 import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
 
@@ -41,41 +41,52 @@ public abstract class AbstractCodec implements Codec2 {
 
     private static final String SERVER_SIDE = "server";
 
-    protected static void checkPayload(Channel channel, long size) throws IOException {
-        int payload = Constants.DEFAULT_PAYLOAD;
-        if (channel != null && channel.getUrl() != null) {
-            payload = channel.getUrl().getParameter(Constants.PAYLOAD_KEY, Constants.DEFAULT_PAYLOAD);
-        }
-        if (payload > 0 && size > payload) {
-            ExceedPayloadLimitException e = new ExceedPayloadLimitException(
-                "Data length too large: " + size + ", max payload: " + payload + ", channel: " + channel);
-            logger.error(e);
-            throw e;
-        }
-    }
+	/**
+	 * 校验消息长度
+	 * 默认消息长度是8M
+	 */
+	protected static void checkPayload(Channel channel, long size) throws IOException {
+		int payload = Constants.DEFAULT_PAYLOAD;
+		if (channel != null && channel.getUrl() != null) {
+			payload = channel.getUrl().getParameter(Constants.PAYLOAD_KEY, Constants.DEFAULT_PAYLOAD);
+		}
+		if (payload > 0 && size > payload) {
+			ExceedPayloadLimitException e = new ExceedPayloadLimitException(
+					"Data length too large: " + size + ", max payload: " + payload + ", channel: " + channel);
+			logger.error(e);
+			throw e;
+		}
+	}
 
     protected Serialization getSerialization(Channel channel) {
         return CodecSupport.getSerialization(channel.getUrl());
-    }
+	}
 
-    protected boolean isClientSide(Channel channel) {
-        String side = (String)channel.getAttribute(SIDE_KEY);
-        if (CLIENT_SIDE.equals(side)) {
-            return true;
-        } else if (SERVER_SIDE.equals(side)) {
-            return false;
-        } else {
-            InetSocketAddress address = channel.getRemoteAddress();
-            URL url = channel.getUrl();
-            boolean isClient = url.getPort() == address.getPort()
-                && NetUtils.filterLocalHost(url.getIp()).equals(
-                NetUtils.filterLocalHost(address.getAddress()
-                    .getHostAddress()));
-            channel.setAttribute(SIDE_KEY, isClient ? CLIENT_SIDE
-                : SERVER_SIDE);
-            return isClient;
-        }
-    }
+	/**
+	 * 判断是否是客户端
+	 */
+	protected boolean isClientSide(Channel channel) {
+		// 获取Channel中的side参数
+		String side = (String)channel.getAttribute(SIDE_KEY);
+
+		if (CLIENT_SIDE.equals(side)) {
+			return true;
+		} else if (SERVER_SIDE.equals(side)) {
+			return false;
+		} else {
+			// 如果side存的既不是client，也不是server
+			// 从URL中重新获取信息进行判断
+			InetSocketAddress address = channel.getRemoteAddress();
+			URL url = channel.getUrl();
+			boolean isClient = url.getPort() == address.getPort()
+					&& NetUtils.filterLocalHost(url.getIp()).equals(
+					NetUtils.filterLocalHost(address.getAddress()
+							.getHostAddress()));
+			channel.setAttribute(SIDE_KEY, isClient ? CLIENT_SIDE
+					: SERVER_SIDE);
+			return isClient;
+		}
+	}
 
     protected boolean isServerSide(Channel channel) {
         return !isClientSide(channel);
