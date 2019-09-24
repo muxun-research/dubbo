@@ -29,29 +29,41 @@ import java.lang.reflect.Method;
  */
 public class InvokerInvocationHandler implements InvocationHandler {
     private static final Logger logger = LoggerFactory.getLogger(InvokerInvocationHandler.class);
-    private final Invoker<?> invoker;
+	/**
+	 * Invoker对象
+	 */
+	private final Invoker<?> invoker;
 
     public InvokerInvocationHandler(Invoker<?> handler) {
         this.invoker = handler;
-    }
+	}
 
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        String methodName = method.getName();
-        Class<?>[] parameterTypes = method.getParameterTypes();
-        if (method.getDeclaringClass() == Object.class) {
-            return method.invoke(invoker, args);
-        }
-        if ("toString".equals(methodName) && parameterTypes.length == 0) {
-            return invoker.toString();
-        }
-        if ("hashCode".equals(methodName) && parameterTypes.length == 0) {
-            return invoker.hashCode();
-        }
-        if ("equals".equals(methodName) && parameterTypes.length == 1) {
-            return invoker.equals(args[0]);
-        }
+	/**
+	 * 进行RPC调用
+	 */
+	@Override
+	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+		// 获取方法名称
+		String methodName = method.getName();
+		// 获取方法的参数类型
+		Class<?>[] parameterTypes = method.getParameterTypes();
+		// 处理wait()、notify()、notifyAll()等返回Object的方法
+		if (method.getDeclaringClass() == Object.class) {
+			return method.invoke(invoker, args);
+		}
+		// 处理toString()方法
+		if ("toString".equals(methodName) && parameterTypes.length == 0) {
+			return invoker.toString();
+		}
+		// 处理hashCode()方法
+		if ("hashCode".equals(methodName) && parameterTypes.length == 0) {
+			return invoker.hashCode();
+		}
+		// 处理equals()方法
+		if ("equals".equals(methodName) && parameterTypes.length == 1) {
+			return invoker.equals(args[0]);
+		}
 
-        return invoker.invoke(new RpcInvocation(method, args)).recreate();
-    }
+		return invoker.invoke(new RpcInvocation(method, args)).recreate();
+	}
 }

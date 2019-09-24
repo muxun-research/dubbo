@@ -23,39 +23,38 @@ import org.apache.dubbo.common.extension.SPI;
 import static org.apache.dubbo.rpc.Constants.PROXY_KEY;
 
 /**
- * ProxyFactory. (API/SPI, Singleton, ThreadSafe)
+ * 代理工厂
+ * 通过SPI方式进行加载，单例，线程安全
  */
 @SPI("javassist")
 public interface ProxyFactory {
 
-    /**
-     * create proxy.
-     *
-     * @param invoker
-     * @return proxy
-     */
-    @Adaptive({PROXY_KEY})
-    <T> T getProxy(Invoker<T> invoker) throws RpcException;
+	/**
+	 * 创建proxy，在引用服务调用
+	 * 示例：invoker是通过Protocol将Service接口创建出Invoker
+	 * @param invoker Consumer调用Provider的invoker
+	 * @return proxy
+	 */
+	@Adaptive({PROXY_KEY})
+	<T> T getProxy(Invoker<T> invoker) throws RpcException;
 
-    /**
-     * create proxy.
-     *
-     * @param invoker
-     * @return proxy
-     */
-    @Adaptive({PROXY_KEY})
-    <T> T getProxy(Invoker<T> invoker, boolean generic) throws RpcException;
+	/**
+	 * create proxy.
+	 * @param invoker
+	 * @return proxy
+	 */
+	@Adaptive({PROXY_KEY})
+	<T> T getProxy(Invoker<T> invoker, boolean generic) throws RpcException;
 
-    /**
-     * create invoker.
-     *
-     * @param <T>
-     * @param proxy
-     * @param type
-     * @param url
-     * @return invoker
-     */
-    @Adaptive({PROXY_KEY})
-    <T> Invoker<T> getInvoker(T proxy, Class<T> type, URL url) throws RpcException;
+	/**
+	 * 创建proxy，在暴露服务时调用
+	 * @param <T>
+	 * @param proxy
+	 * @param type
+	 * @param url
+	 * @return invoker
+	 */
+	@Adaptive({PROXY_KEY})
+	<T> Invoker<T> getInvoker(T proxy, Class<T> type, URL url) throws RpcException;
 
 }

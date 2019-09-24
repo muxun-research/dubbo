@@ -81,27 +81,28 @@ public class ClassUtils {
     }
 
     /**
-     * get class loader
-     *
+	 * 获取类加载器
      * @param clazz
      * @return class loader
      */
     public static ClassLoader getClassLoader(Class<?> clazz) {
         ClassLoader cl = null;
         try {
+			// 获取当前线程的类加载器
             cl = Thread.currentThread().getContextClassLoader();
         } catch (Throwable ex) {
-            // Cannot access thread context ClassLoader - falling back to system class loader...
+			// 如果无法获取线程上下文的类加载器，那么久回溯使用系统类加载器
         }
         if (cl == null) {
-            // No thread context class loader -> use class loader of this class.
+			// 如果没有当前上下文的类加载器，优先使用类的加载器
             cl = clazz.getClassLoader();
+			// 如果也没有类的加载器
             if (cl == null) {
-                // getClassLoader() returning null indicates the bootstrap ClassLoader
+				// 获取SystemClassLoader
                 try {
                     cl = ClassLoader.getSystemClassLoader();
                 } catch (Throwable ex) {
-                    // Cannot access system ClassLoader - oh well, maybe the caller can live with null...
+					// 既然SystemClassLoader无法加载，那么可能这个对象可以在为null的情况下依然存活
                 }
             }
         }

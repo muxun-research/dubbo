@@ -26,24 +26,31 @@ import org.apache.dubbo.rpc.proxy.InvokerInvocationHandler;
 
 /**
  * JavaassistRpcProxyFactory
+ * Javaassist RPC代理工厂
  */
 public class JavassistProxyFactory extends AbstractProxyFactory {
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T> T getProxy(Invoker<T> invoker, Class<?>[] interfaces) {
-        return (T) Proxy.getProxy(interfaces).newInstance(new InvokerInvocationHandler(invoker));
-    }
+	/**
+	 * 获取proxy对象
+	 */
+	@Override
+	@SuppressWarnings("unchecked")
+	public <T> T getProxy(Invoker<T> invoker, Class<?>[] interfaces) {
+		// proxy和开发者代码解耦
+		return (T) Proxy.getProxy(interfaces).newInstance(new InvokerInvocationHandler(invoker));
+	}
 
     @Override
     public <T> Invoker<T> getInvoker(T proxy, Class<T> type, URL url) {
         // TODO Wrapper cannot handle this scenario correctly: the classname contains '$'
+		// Wrapper类无法处理带"$"的类名，故带有"$"的类名需要使用指定类的类型
         final Wrapper wrapper = Wrapper.getWrapper(proxy.getClass().getName().indexOf('$') < 0 ? proxy.getClass() : type);
         return new AbstractProxyInvoker<T>(proxy, type, url) {
             @Override
             protected Object doInvoke(T proxy, String methodName,
                                       Class<?>[] parameterTypes,
                                       Object[] arguments) throws Throwable {
+				// 调用wrapper的invokeMethod()方法，完成方法调用
                 return wrapper.invokeMethod(proxy, methodName, parameterTypes, arguments);
             }
         };
