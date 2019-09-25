@@ -25,7 +25,9 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 /**
- * InvokerHandler
+ * 调用执行
+ * 在实例化服务的时候，在创建代理类时，通过newInstance()方法，传入了InvokerInvocationHandler
+ * @see {@link org.apache.dubbo.rpc.proxy.javassist.JavassistProxyFactory#getProxy(Invoker, Class[])} ]
  */
 public class InvokerInvocationHandler implements InvocationHandler {
     private static final Logger logger = LoggerFactory.getLogger(InvokerInvocationHandler.class);

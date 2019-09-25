@@ -37,11 +37,17 @@ import java.util.concurrent.CompletionException;
  */
 public abstract class AbstractProxyInvoker<T> implements Invoker<T> {
     Logger logger = LoggerFactory.getLogger(AbstractProxyInvoker.class);
-
+	/**
+	 * 代理的对象，一般是Service对象
+	 */
     private final T proxy;
-
+	/**
+	 * 接口类型，一般是Service接口类
+	 */
     private final Class<T> type;
-
+	/**
+	 * 暴露服务的URL
+	 */
     private final URL url;
 
     public AbstractProxyInvoker(T proxy, Class<T> type, URL url) {
@@ -80,12 +86,16 @@ public abstract class AbstractProxyInvoker<T> implements Invoker<T> {
 
     @Override
     public Result invoke(Invocation invocation) throws RpcException {
-        try {
+		try {
+			// 执行调用
             Object value = doInvoke(proxy, invocation.getMethodName(), invocation.getParameterTypes(), invocation.getArguments());
+			// 包装返回的结果
             CompletableFuture<Object> future = wrapWithFuture(value, invocation);
+
             AsyncRpcResult asyncRpcResult = new AsyncRpcResult(invocation);
             future.whenComplete((obj, t) -> {
                 AppResponse result = new AppResponse();
+				// 有异常则抛出异常
                 if (t != null) {
                     if (t instanceof CompletionException) {
                         result.setException(t.getCause());
@@ -94,7 +104,8 @@ public abstract class AbstractProxyInvoker<T> implements Invoker<T> {
                     }
                 } else {
                     result.setValue(obj);
-                }
+				}
+				// 没有异常设置返回值
                 asyncRpcResult.complete(result);
             });
             return asyncRpcResult;
@@ -106,16 +117,19 @@ public abstract class AbstractProxyInvoker<T> implements Invoker<T> {
         } catch (Throwable e) {
             throw new RpcException("Failed to invoke remote proxy method " + invocation.getMethodName() + " to " + getUrl() + ", cause: " + e.getMessage(), e);
         }
-    }
+	}
 
-    private CompletableFuture<Object> wrapWithFuture (Object value, Invocation invocation) {
-        if (RpcContext.getContext().isAsyncStarted()) {
-            return ((AsyncContextImpl)(RpcContext.getContext().getAsyncContext())).getInternalFuture();
-        } else if (value instanceof CompletableFuture) {
-            return (CompletableFuture<Object>) value;
-        }
-        return CompletableFuture.completedFuture(value);
-    }
+	/**
+	 * 使用CompletableFuture包装返回结果
+	 */
+	private CompletableFuture<Object> wrapWithFuture (Object value, Invocation invocation) {
+		if (RpcContext.getContext().isAsyncStarted()) {
+			return ((AsyncContextImpl)(RpcContext.getContext().getAsyncContext())).getInternalFuture();
+		} else if (value instanceof CompletableFuture) {
+			return (CompletableFuture<Object>) value;
+		}
+		return CompletableFuture.completedFuture(value);
+	}
 
     protected abstract Object doInvoke(T proxy, String methodName, Class<?>[] parameterTypes, Object[] arguments) throws Throwable;
 

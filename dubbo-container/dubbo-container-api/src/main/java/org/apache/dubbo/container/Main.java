@@ -33,9 +33,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
 
 /**
- * Main. (API, Static, ThreadSafe)
- *
- * This class is entry point loading containers.
+ * Dubbo容器的主启动程序
  */
 public class Main {
 
@@ -53,6 +51,7 @@ public class Main {
 
     public static void main(String[] args) {
         try {
+			// 如果没有传入配置，则使用默认的配置
             if (ArrayUtils.isEmpty(args)) {
                 String config = ConfigUtils.getProperty(CONTAINER_KEY, loader.getDefaultExtensionName());
                 args = COMMA_SPLIT_PATTERN.split(config);

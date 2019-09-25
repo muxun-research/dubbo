@@ -20,17 +20,19 @@ import org.apache.dubbo.common.extension.SPI;
 
 /**
  * Container. (SPI, Singleton, ThreadSafe)
+ * 服务容器，默认使用spring容器
+ * 使用SPI加载，单例，线程安全
  */
 @SPI("spring")
 public interface Container {
 
     /**
-     * start method to load the container.
+	 * 开始加载服务容器
      */
     void start();
 
     /**
-     * stop method to unload the container.
+	 * 停止并写在服务容器
      */
     void stop();
 
