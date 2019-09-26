@@ -29,8 +29,8 @@ import org.apache.dubbo.rpc.cluster.LoadBalance;
 import java.util.List;
 
 /**
- * BroadcastClusterInvoker
- *
+ * 广播调用
+ * 顾名思义，通知所有的provider
  */
 public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
 
@@ -47,6 +47,7 @@ public class BroadcastClusterInvoker<T> extends AbstractClusterInvoker<T> {
         RpcContext.getContext().setInvokers((List) invokers);
         RpcException exception = null;
         Result result = null;
+		// 遍历调用者，调用所有的调用者
         for (Invoker<T> invoker : invokers) {
             try {
                 result = invoker.invoke(invocation);

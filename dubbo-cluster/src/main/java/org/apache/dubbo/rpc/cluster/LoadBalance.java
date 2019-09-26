@@ -29,20 +29,20 @@ import java.util.List;
 /**
  * 负载均衡
  * 使用SPI加载，单例，线程安全
+ * 默认使用随机策略
  * @see org.apache.dubbo.rpc.cluster.Cluster#join(Directory)
  */
 @SPI(RandomLoadBalance.NAME)
 public interface LoadBalance {
 
-    /**
-     * select one invoker in list.
-     *
-     * @param invokers   invokers.
-     * @param url        refer url
-     * @param invocation invocation.
-     * @return selected invoker.
-     */
-    @Adaptive("loadbalance")
-    <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException;
+	/**
+	 * 从调用者列表中选择一个
+	 * @param invokers   invokers.
+	 * @param url        refer url
+	 * @param invocation invocation.
+	 * @return selected invoker.
+	 */
+	@Adaptive("loadbalance")
+	<T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException;
 
 }

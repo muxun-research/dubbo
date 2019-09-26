@@ -62,11 +62,13 @@ public class Main {
                 containers.add(loader.getExtension(args[i]));
             }
             logger.info("Use container type(" + Arrays.toString(args) + ") to run dubbo serivce.");
-
+			// 如果使用JVM关闭的hook方法
             if ("true".equals(System.getProperty(SHUTDOWN_HOOK_KEY))) {
+				// 则添加Dubbo的服务停止hook方法
                 Runtime.getRuntime().addShutdownHook(new Thread("dubbo-container-shutdown-hook") {
                     @Override
                     public void run() {
+						// 遍历容器，进行关闭
                         for (Container container : containers) {
                             try {
                                 container.stop();
@@ -84,7 +86,7 @@ public class Main {
                     }
                 });
             }
-
+			// 遍历容器，进行启动
             for (Container container : containers) {
                 container.start();
                 logger.info("Dubbo " + container.getClass().getSimpleName() + " started!");

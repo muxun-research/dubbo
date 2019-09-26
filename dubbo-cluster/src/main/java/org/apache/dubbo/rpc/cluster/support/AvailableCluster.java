@@ -22,8 +22,7 @@ import org.apache.dubbo.rpc.cluster.Cluster;
 import org.apache.dubbo.rpc.cluster.Directory;
 
 /**
- * AvailableCluster
- *
+ * 调用首个可用服务器
  */
 public class AvailableCluster implements Cluster {
 

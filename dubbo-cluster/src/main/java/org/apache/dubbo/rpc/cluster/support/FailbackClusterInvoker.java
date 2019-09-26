@@ -35,25 +35,29 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_FAILBACK_TIMES;
-import static org.apache.dubbo.rpc.cluster.Constants.RETRIES_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_FAILBACK_TASKS;
+import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_FAILBACK_TIMES;
 import static org.apache.dubbo.rpc.cluster.Constants.FAIL_BACK_TASKS_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.RETRIES_KEY;
 
 /**
- * When fails, record failure requests and schedule for retry on a regular interval.
- * Especially useful for services of notification.
- *
- * <a href="http://en.wikipedia.org/wiki/Failback">Failback</a>
+ * 调用失败时，记录失败的请求和重试计划
+ * 对通知服务特别有用
  */
 public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(FailbackClusterInvoker.class);
-
+	/**
+	 * 重试频率
+	 */
     private static final long RETRY_FAILED_PERIOD = 5;
-
+	/**
+	 * 重试次数
+	 */
     private final int retries;
-
+	/**
+	 * 失败计划任务数
+	 */
     private final int failbackTasks;
 
     private volatile Timer failTimer;

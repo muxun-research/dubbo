@@ -32,32 +32,40 @@ import static org.apache.dubbo.rpc.cluster.Constants.WEIGHT_KEY;
 
 /**
  * AbstractLoadBalance
+ * 负载均衡抽象类，提供权重计算功能
  */
 public abstract class AbstractLoadBalance implements LoadBalance {
     /**
-     * Calculate the weight according to the uptime proportion of warmup time
-     * the new weight will be within 1(inclusive) to weight(inclusive)
-     *
+	 * 计算启动预热时的权重
+	 * 新的权重的范围是1到weight的闭区间
      * @param uptime the uptime in milliseconds
      * @param warmup the warmup time in milliseconds
      * @param weight the weight of an invoker
      * @return weight which takes warmup into account
      */
     static int calculateWarmupWeight(int uptime, int warmup, int weight) {
+		// 计算权重，其实相当于weight的时间百分比，直到达到weight，weight*(uptime/warmup)
+		// 意思是，100的weight，如果需要预热10分钟，则每分钟增加10%的流量
+		// 权重为[1, weight]
         int ww = (int) ( uptime / ((float) warmup / weight));
         return ww < 1 ? 1 : (Math.min(ww, weight));
     }
 
-    @Override
-    public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) {
-        if (CollectionUtils.isEmpty(invokers)) {
-            return null;
-        }
-        if (invokers.size() == 1) {
-            return invokers.get(0);
-        }
-        return doSelect(invokers, url, invocation);
-    }
+	/**
+	 * 实现{@link LoadBalance}接口的select方法，根据不同的实现类，实现doSelect()核心方法
+	 */
+	@Override
+	public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) {
+		if (CollectionUtils.isEmpty(invokers)) {
+			return null;
+		}
+		// 如果仅有一个调用者，没必要进行负载均衡
+		if (invokers.size() == 1) {
+			return invokers.get(0);
+		}
+		// 进行负载均衡，选择调用者
+		return doSelect(invokers, url, invocation);
+	}
 
     protected abstract <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation);
 
@@ -71,20 +79,26 @@ public abstract class AbstractLoadBalance implements LoadBalance {
      * @return weight
      */
     int getWeight(Invoker<?> invoker, Invocation invocation) {
+		// 获取weight的配置，默认为100
         int weight = invoker.getUrl().getMethodParameter(invocation.getMethodName(), WEIGHT_KEY, DEFAULT_WEIGHT);
         if (weight > 0) {
             long timestamp = invoker.getUrl().getParameter(TIMESTAMP_KEY, 0L);
             if (timestamp > 0L) {
+				// 获取启动的总时长
                 long uptime = System.currentTimeMillis() - timestamp;
+				// 如果时间出现异常，weight为1
                 if (uptime < 0) {
                     return 1;
-                }
+				}
+				// 获取预热的总时长
                 int warmup = invoker.getUrl().getParameter(WARMUP_KEY, DEFAULT_WARMUP);
+				// 如果处于预热中，则需要计算当前的权重
                 if (uptime > 0 && uptime < warmup) {
                     weight = calculateWarmupWeight((int)uptime, warmup, weight);
                 }
             }
-        }
+		}
+		// 否则取weight和0的最大值
         return Math.max(weight, 0);
     }
 }

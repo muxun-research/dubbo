@@ -24,7 +24,8 @@ import org.apache.dubbo.rpc.RpcException;
 import java.util.List;
 
 /**
- * Directory. (SPI, Prototype, ThreadSafe)
+ * 调用目录，可以看成是List<Invoker>
+ * 可以随着注册中心的变化而变换
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Directory_service">Directory Service</a>
  *
