@@ -21,8 +21,7 @@ import org.apache.dubbo.rpc.cluster.Configurator;
 import org.apache.dubbo.rpc.cluster.ConfiguratorFactory;
 
 /**
- * OverrideConfiguratorFactory
- *
+ * 实现ConfigurationFactory
  */
 public class OverrideConfiguratorFactory implements ConfiguratorFactory {
 

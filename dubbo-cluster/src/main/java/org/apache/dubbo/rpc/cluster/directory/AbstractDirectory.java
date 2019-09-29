@@ -31,17 +31,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.MONITOR_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
+import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 
 /**
- * Abstract implementation of Directory: Invoker list returned from this Directory's list method have been filtered by Routers
- *
+ * Directory的抽象实现，返回的invoker列表已经通过Router过滤
  */
 public abstract class AbstractDirectory<T> implements Directory<T> {
 
-    // logger
     private static final Logger logger = LoggerFactory.getLogger(AbstractDirectory.class);
 
     private final URL url;
@@ -64,15 +62,18 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
         if (url == null) {
             throw new IllegalArgumentException("url == null");
         }
-
+		// 如果是registry，注册中心协议
         if (url.getProtocol().equals(REGISTRY_PROTOCOL)) {
+			// 获取URL中引用信息
             Map<String, String> queryMap = StringUtils.parseQueryString(url.getParameterAndDecoded(REFER_KEY));
+			// URL中添加引用信息，移除监控参数
             this.url = url.addParameters(queryMap).removeParameter(MONITOR_KEY);
         } else {
             this.url = url;
         }
-
+		// 消费者URL
         this.consumerUrl = consumerUrl;
+		// 设置Router
         setRouterChain(routerChain);
     }
 
@@ -81,7 +82,7 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
         if (destroyed) {
             throw new RpcException("Directory already destroyed .url: " + getUrl());
         }
-
+		// 获取invoker列表
         return doList(invocation);
     }
 

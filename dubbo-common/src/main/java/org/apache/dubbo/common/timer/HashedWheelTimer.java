@@ -201,8 +201,7 @@ public class HashedWheelTimer implements Timer {
     }
 
     /**
-     * Creates a new timer.
-     *
+	 * hash轮定时任务调度器
      * @param threadFactory      a {@link ThreadFactory} that creates a
      *                           background {@link Thread} which is dedicated to
      *                           {@link TimerTask} execution.

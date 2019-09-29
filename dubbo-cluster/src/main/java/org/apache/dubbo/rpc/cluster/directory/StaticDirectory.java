@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * StaticDirectory
+ * 静态目录，仅会从缓存中获取
  */
 public class StaticDirectory<T> extends AbstractDirectory<T> {
     private static final Logger logger = LoggerFactory.getLogger(StaticDirectory.class);
@@ -92,17 +92,21 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
         this.setRouterChain(routerChain);
     }
 
-    @Override
-    protected List<Invoker<T>> doList(Invocation invocation) throws RpcException {
-        List<Invoker<T>> finalInvokers = invokers;
-        if (routerChain != null) {
-            try {
-                finalInvokers = routerChain.route(getConsumerUrl(), invocation);
-            } catch (Throwable t) {
-                logger.error("Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(), t);
-            }
-        }
-        return finalInvokers == null ? Collections.emptyList() : finalInvokers;
-    }
+	/**
+	 * 本地文件指定式
+	 */
+	@Override
+	protected List<Invoker<T>> doList(Invocation invocation) throws RpcException {
+		List<Invoker<T>> finalInvokers = invokers;
+		if (routerChain != null) {
+			try {
+				// 使用routerChain筛选invokers
+				finalInvokers = routerChain.route(getConsumerUrl(), invocation);
+			} catch (Throwable t) {
+				logger.error("Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(), t);
+			}
+		}
+		return finalInvokers == null ? Collections.emptyList() : finalInvokers;
+	}
 
 }

@@ -57,6 +57,7 @@ public class ClusterUtils {
             map.putAll(remoteMap);
 
             // Remove configurations from provider, some items should be affected by provider.
+			// 清除一些只有provider才会生效的参数
             map.remove(THREAD_NAME_KEY);
             map.remove(DEFAULT_KEY_PREFIX + THREAD_NAME_KEY);
 
@@ -81,25 +82,25 @@ public class ClusterUtils {
 
         if (localMap != null && localMap.size() > 0) {
             Map<String, String> copyOfLocalMap = new HashMap<>(localMap);
-
+			// 清除一些已有的，避免覆盖
             if(map.containsKey(GROUP_KEY)){
                 copyOfLocalMap.remove(GROUP_KEY);
             }
             if(map.containsKey(VERSION_KEY)){
                 copyOfLocalMap.remove(VERSION_KEY);
             }
-
+			// 删除一些已经更新的，避免覆盖
             copyOfLocalMap.remove(RELEASE_KEY);
             copyOfLocalMap.remove(DUBBO_VERSION_KEY);
             copyOfLocalMap.remove(METHODS_KEY);
             copyOfLocalMap.remove(TIMESTAMP_KEY);
             copyOfLocalMap.remove(TAG_KEY);
-
+			// 合并参数
             map.putAll(copyOfLocalMap);
 
             map.put(REMOTE_APPLICATION_KEY, remoteMap.get(APPLICATION_KEY));
 
-            // Combine filters and listeners on Provider and Consumer
+			// 合并provider和consumer的filters和listeners
             String remoteFilter = remoteMap.get(REFERENCE_FILTER_KEY);
             String localFilter = copyOfLocalMap.get(REFERENCE_FILTER_KEY);
             if (remoteFilter != null && remoteFilter.length() > 0
@@ -113,7 +114,7 @@ public class ClusterUtils {
                 map.put(INVOKER_LISTENER_KEY, remoteListener + "," + localListener);
             }
         }
-
+		// URL参数合并完成
         return remoteUrl.clearParameters().addParameters(map);
     }
 

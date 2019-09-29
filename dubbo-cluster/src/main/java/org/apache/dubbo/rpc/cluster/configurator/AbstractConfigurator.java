@@ -26,8 +26,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.dubbo.rpc.cluster.Constants.CONFIG_VERSION_KEY;
-import static org.apache.dubbo.rpc.cluster.Constants.OVERRIDE_PROVIDERS_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_VALUE;
 import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
 import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
@@ -40,9 +38,11 @@ import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.COMPATIBLE_CONFIG_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.DYNAMIC_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.CONFIG_VERSION_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.OVERRIDE_PROVIDERS_KEY;
 
 /**
- * AbstractOverrideConfigurator
+ * 配置信息的抽象类
  */
 public abstract class AbstractConfigurator implements Configurator {
 
@@ -55,32 +55,43 @@ public abstract class AbstractConfigurator implements Configurator {
         this.configuratorUrl = url;
     }
 
-    @Override
-    public URL getUrl() {
-        return configuratorUrl;
-    }
+	/**
+	 * 获取配置URL，里面带有配置规则
+	 */
+	@Override
+	public URL getUrl() {
+		return configuratorUrl;
+	}
 
     @Override
     public URL configure(URL url) {
-        // If override url is not enabled or is invalid, just return.
+		// 如果需要复写的url不可用，或者处于非法状态，直接返回该URL
         if (!configuratorUrl.getParameter(ENABLED_KEY, true) || configuratorUrl.getHost() == null || url == null || url.getHost() == null) {
             return url;
         }
-        /**
-         * This if branch is created since 2.7.0.
-         */
+		/**
+		 * 接下来的内容始于2.7.0版本
+		 */
+		// 获取版本信息
         String apiVersion = configuratorUrl.getParameter(CONFIG_VERSION_KEY);
         if (StringUtils.isNotEmpty(apiVersion)) {
+			// 获取身份信息
             String currentSide = url.getParameter(SIDE_KEY);
+			// 根据身份信息获取配置身份信息
             String configuratorSide = configuratorUrl.getParameter(SIDE_KEY);
+			// 如果身份信息和配置身份信息相同，并且是消费者，并且配置信息没有指定端口
+			// 如果复写的url中带有端口信息，证明是一个provider侧的地址，我们想要通过复写url来控制一个指定的provider
+			// 生效于指定的provider实例，或者控制这个provider的consumer
             if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide) && 0 == configuratorUrl.getPort()) {
+				// NetUtils.getLocalHost()是消费者注册到注册中心的地址
                 url = configureIfMatch(NetUtils.getLocalHost(), url);
             } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide) && url.getPort() == configuratorUrl.getPort()) {
+
                 url = configureIfMatch(url.getHost(), url);
             }
         }
-        /**
-         * This else branch is deprecated and is left only to keep compatibility with versions before 2.7.0
+		/**
+		 * 此处的else分支已经失效，现在只是为了保证2.7.0版本之前的完整性
          */
         else {
             url = configureDeprecated(url);

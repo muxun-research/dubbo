@@ -72,7 +72,9 @@ public class RpcContext {
             return new RpcContext();
         }
     };
-
+	/**
+	 * 调用过程中附加的参数
+	 */
     private final Map<String, String> attachments = new HashMap<String, String>();
     private final Map<String, Object> values = new HashMap<String, Object>();
 
@@ -498,9 +500,8 @@ public class RpcContext {
         return this;
     }
 
-    /**
-     * get attachments.
-     *
+	/**
+	 * 调用过程中附加的参数
      * @return attachments
      */
     public Map<String, String> getAttachments() {

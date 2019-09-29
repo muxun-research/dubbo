@@ -64,11 +64,12 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
 
     public FailbackClusterInvoker(Directory<T> directory) {
         super(directory);
-
+		// 从URL中获取重试次数，默认是3次
         int retriesConfig = getUrl().getParameter(RETRIES_KEY, DEFAULT_FAILBACK_TIMES);
         if (retriesConfig <= 0) {
             retriesConfig = DEFAULT_FAILBACK_TIMES;
         }
+		// 从URL中获取失败执行任务数量，默认100个
         int failbackTasksConfig = getUrl().getParameter(FAIL_BACK_TASKS_KEY, DEFAULT_FAILBACK_TASKS);
         if (failbackTasksConfig <= 0) {
             failbackTasksConfig = DEFAULT_FAILBACK_TASKS;
@@ -78,6 +79,7 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
     }
 
     private void addFailed(LoadBalance loadbalance, Invocation invocation, List<Invoker<T>> invokers, Invoker<T> lastInvoker) {
+		// 初始化任务失败的定时任务，加持双重校验锁
         if (failTimer == null) {
             synchronized (this) {
                 if (failTimer == null) {
@@ -88,8 +90,10 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
                 }
             }
         }
+		// 重试任务
         RetryTimerTask retryTimerTask = new RetryTimerTask(loadbalance, invocation, invokers, lastInvoker, retries, RETRY_FAILED_PERIOD);
         try {
+			// 添加重试任务
             failTimer.newTimeout(retryTimerTask, RETRY_FAILED_PERIOD, TimeUnit.SECONDS);
         } catch (Throwable e) {
             logger.error("Failback background works error,invocation->" + invocation + ", exception: " + e.getMessage());
@@ -100,8 +104,11 @@ public class FailbackClusterInvoker<T> extends AbstractClusterInvoker<T> {
     protected Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
         Invoker<T> invoker = null;
         try {
+			// 校验invokers
             checkInvokers(invokers, invocation);
+			// 选择invoker，根据负载均衡机制
             invoker = select(loadbalance, invocation, invokers, null);
+			// 调用invoke
             return invoker.invoke(invocation);
         } catch (Throwable e) {
             logger.error("Failback to invoke method " + invocation.getMethodName() + ", wait for retry in background. Ignored exception: "
