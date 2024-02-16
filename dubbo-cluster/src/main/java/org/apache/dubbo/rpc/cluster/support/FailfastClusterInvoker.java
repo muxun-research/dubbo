@@ -24,6 +24,7 @@ import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
+import org.apache.dubbo.rpc.support.RpcUtils;
 
 import java.util.List;
 
@@ -32,7 +33,6 @@ import java.util.List;
  * Usually used for non-idempotent write operations
  *
  * <a href="http://en.wikipedia.org/wiki/Fail-fast">Fail-fast</a>
- *
  */
 public class FailfastClusterInvoker<T> extends AbstractClusterInvoker<T> {
 
@@ -41,19 +41,22 @@ public class FailfastClusterInvoker<T> extends AbstractClusterInvoker<T> {
     }
 
     @Override
-    public Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
-        checkInvokers(invokers, invocation);
+    public Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance)
+            throws RpcException {
         Invoker<T> invoker = select(loadbalance, invocation, invokers, null);
         try {
-            return invoker.invoke(invocation);
+            return invokeWithContext(invoker, invocation);
         } catch (Throwable e) {
             if (e instanceof RpcException && ((RpcException) e).isBiz()) { // biz exception.
                 throw (RpcException) e;
             }
-            throw new RpcException(e instanceof RpcException ? ((RpcException) e).getCode() : 0,
-                    "Failfast invoke providers " + invoker.getUrl() + " " + loadbalance.getClass().getSimpleName()
-                            + " select from all providers " + invokers + " for service " + getInterface().getName()
-                            + " method " + invocation.getMethodName() + " on consumer " + NetUtils.getLocalHost()
+            throw new RpcException(
+                    e instanceof RpcException ? ((RpcException) e).getCode() : 0,
+                    "Failfast invoke providers " + invoker.getUrl() + " "
+                            + loadbalance.getClass().getSimpleName()
+                            + " for service " + getInterface().getName()
+                            + " method " + RpcUtils.getMethodName(invocation) + " on consumer "
+                            + NetUtils.getLocalHost()
                             + " use dubbo version " + Version.getVersion()
                             + ", but no luck to perform the invocation. Last error is: " + e.getMessage(),
                     e.getCause() != null ? e.getCause() : e);

@@ -29,7 +29,6 @@ public class DirectDispatcher implements Dispatcher {
 
     @Override
     public ChannelHandler dispatch(ChannelHandler handler, URL url) {
-        return handler;
+        return new DirectChannelHandler(handler, url);
     }
-
 }

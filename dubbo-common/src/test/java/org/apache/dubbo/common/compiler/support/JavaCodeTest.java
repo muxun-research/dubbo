@@ -18,9 +18,18 @@ package org.apache.dubbo.common.compiler.support;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class JavaCodeTest {
+class JavaCodeTest {
 
-    public final static AtomicInteger SUBFIX = new AtomicInteger(8);
+    public static final AtomicInteger SUBFIX = new AtomicInteger(8);
+
+    boolean shouldIgnoreWithoutPackage() {
+        String jdkVersion = System.getProperty("java.specification.version");
+        try {
+            return Integer.parseInt(jdkVersion) > 15;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
     String getSimpleCode() {
         StringBuilder code = new StringBuilder();
@@ -30,21 +39,22 @@ public class JavaCodeTest {
         code.append("   public String sayHello() { ");
         code.append("       return \"Hello world!\"; ");
         code.append("   }");
-        code.append("}");
+        code.append('}');
         return code.toString();
     }
 
-    String getSimpleCodeWithoutPackage(){
+    String getSimpleCodeWithoutPackage() {
         StringBuilder code = new StringBuilder();
-        code.append("public class HelloServiceImpl" + SUBFIX.getAndIncrement() + "implements org.apache.dubbo.common.compiler.support.HelloService.HelloService {");
+        code.append("public class HelloServiceImpl" + SUBFIX.getAndIncrement()
+                + "implements org.apache.dubbo.common.compiler.support.HelloService.HelloService {");
         code.append("   public String sayHello() { ");
         code.append("       return \"Hello world!\"; ");
         code.append("   }");
-        code.append("}");
+        code.append('}');
         return code.toString();
     }
 
-    String getSimpleCodeWithSyntax(){
+    String getSimpleCodeWithSyntax() {
         StringBuilder code = new StringBuilder();
         code.append("package org.apache.dubbo.common.compiler.support;");
 
@@ -57,7 +67,7 @@ public class JavaCodeTest {
     }
 
     // only used for javassist
-    String getSimpleCodeWithSyntax0(){
+    String getSimpleCodeWithSyntax0() {
         StringBuilder code = new StringBuilder();
         code.append("package org.apache.dubbo.common.compiler.support;");
 
@@ -80,7 +90,7 @@ public class JavaCodeTest {
         code.append("   public String sayHello() { ");
         code.append("       return \"Hello world!\"; ");
         code.append("   }");
-        code.append("}");
+        code.append('}');
         return code.toString();
     }
 
@@ -91,11 +101,12 @@ public class JavaCodeTest {
         code.append("import java.lang.*;\n");
         code.append("import org.apache.dubbo.common.compiler.support;\n");
 
-        code.append("public class HelloServiceImpl" + SUBFIX.getAndIncrement() + " extends org.apache.dubbo.common.compiler.support.HelloServiceImpl0 {\n");
+        code.append("public class HelloServiceImpl" + SUBFIX.getAndIncrement()
+                + " extends org.apache.dubbo.common.compiler.support.HelloServiceImpl0 {\n");
         code.append("   public String sayHello() { ");
         code.append("       return \"Hello world3!\"; ");
         code.append("   }");
-        code.append("}");
+        code.append('}');
         return code.toString();
     }
 }

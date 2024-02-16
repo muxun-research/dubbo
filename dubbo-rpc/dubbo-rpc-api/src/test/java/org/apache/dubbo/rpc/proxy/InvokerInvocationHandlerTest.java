@@ -16,39 +16,39 @@
  */
 package org.apache.dubbo.rpc.proxy;
 
+import org.apache.dubbo.common.URL;
 import org.apache.dubbo.rpc.Invoker;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import java.lang.reflect.Method;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
 import static org.mockito.Mockito.when;
 
-public class InvokerInvocationHandlerTest {
+class InvokerInvocationHandlerTest {
 
-    @Mock
     private Invoker<?> invoker;
-    @InjectMocks
     private InvokerInvocationHandler invokerInvocationHandler;
 
     @BeforeEach
     public void setUp() {
-        MockitoAnnotations.initMocks(this);
+        URL url = URL.valueOf("mock://localhost:8080/FooService?group=mock&version=1.0.0");
+        invoker = Mockito.mock(Invoker.class);
+        when(invoker.getUrl()).thenReturn(url);
+        invokerInvocationHandler = new InvokerInvocationHandler(invoker);
     }
 
     @Test
-    public void testInvokeToString() throws Throwable {
+    void testInvokeToString() throws Throwable {
         String methodName = "toString";
 
         when(invoker.toString()).thenReturn(methodName);
         Method method = invoker.getClass().getMethod(methodName);
 
-        Object result = invokerInvocationHandler.invoke(null, method, new Object[]{});
+        Object result = invokerInvocationHandler.invoke(null, method, new Object[] {});
         Assertions.assertEquals(methodName, result);
     }
-
 }

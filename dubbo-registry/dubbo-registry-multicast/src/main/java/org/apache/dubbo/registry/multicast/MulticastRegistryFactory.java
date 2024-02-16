@@ -28,7 +28,6 @@ public class MulticastRegistryFactory extends AbstractRegistryFactory {
 
     @Override
     public Registry createRegistry(URL url) {
-        return new MulticastRegistry(url);
+        return new MulticastRegistry(url, applicationModel);
     }
-
 }

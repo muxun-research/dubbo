@@ -17,15 +17,90 @@
 package org.apache.dubbo.demo.consumer;
 
 import org.apache.dubbo.demo.DemoService;
+import org.apache.dubbo.demo.GreetingService;
+import org.apache.dubbo.demo.RestDemoService;
+import org.apache.dubbo.demo.TripleService;
+
+import javax.ws.rs.core.MultivaluedHashMap;
+import javax.ws.rs.core.MultivaluedMap;
+
+import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.context.support.ClassPathXmlApplicationContext;
+import po.TestPO;
 
 public class Application {
-    public static void main(String[] args) {
+    /**
+     * In order to make sure multicast registry works, need to specify '-Djava.net.preferIPv4Stack=true' before
+     * launch the application
+     */
+    public static void main(String[] args) throws Exception {
         ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("spring/dubbo-consumer.xml");
         context.start();
         DemoService demoService = context.getBean("demoService", DemoService.class);
-        String hello = demoService.sayHello("world");
-        System.out.println("result: " + hello);
+        GreetingService greetingService = context.getBean("greetingService", GreetingService.class);
+        RestDemoService restDemoService = context.getBean("restDemoService", RestDemoService.class);
+        TripleService tripleService = context.getBean("tripleService", TripleService.class);
+
+        new Thread(() -> {
+                    while (true) {
+                        try {
+                            String greetings = greetingService.hello();
+                            System.out.println(greetings + " from separated thread.");
+                        } catch (Exception e) {
+                            //                    e.printStackTrace();
+                        }
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                })
+                .start();
+
+        new Thread(() -> {
+                    while (true) {
+                        try {
+                            Object restResult = restDemoService.sayHello("rest");
+                            System.out.println(restResult + " from separated thread.");
+                            restResult = restDemoService.testBody5(TestPO.getInstance());
+                            System.out.println(restResult + " from separated thread.");
+
+                            restResult = restDemoService.hello(1, 2);
+                            System.out.println(restResult + " from separated thread.");
+
+                            String form1 = restDemoService.testForm1("form1");
+                            System.out.println(form1);
+
+                            MultivaluedHashMap multivaluedHashMap = new MultivaluedHashMap();
+                            multivaluedHashMap.put("1", Arrays.asList("1"));
+                            multivaluedHashMap.put("2", Arrays.asList("2"));
+                            MultivaluedMap form2 = restDemoService.testForm2(multivaluedHashMap);
+                            System.out.println(form2);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                })
+                .start();
+
+        while (true) {
+            try {
+                CompletableFuture<String> hello = demoService.sayHelloAsync("world");
+                System.out.println("result: " + hello.get());
+
+                String greetings = greetingService.hello();
+                System.out.println("result: " + greetings);
+            } catch (Exception e) {
+                //                e.printStackTrace();
+            }
+
+            Thread.sleep(5000);
+        }
     }
 }

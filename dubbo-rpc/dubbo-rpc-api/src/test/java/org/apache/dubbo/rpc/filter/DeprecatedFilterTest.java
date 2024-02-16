@@ -16,7 +16,6 @@
  */
 package org.apache.dubbo.rpc.filter;
 
-
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.utils.LogUtil;
 import org.apache.dubbo.rpc.Filter;
@@ -26,24 +25,25 @@ import org.apache.dubbo.rpc.support.MyInvoker;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import static org.apache.dubbo.rpc.Constants.DEPRECATED_KEY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * DeprecatedFilterTest.java
  */
-public class DeprecatedFilterTest {
+class DeprecatedFilterTest {
 
     Filter deprecatedFilter = new DeprecatedFilter();
 
     @Test
-    public void testDeprecatedFilter() {
+    void testDeprecatedFilter() {
         URL url = URL.valueOf("test://test:11/test?group=dubbo&version=1.1&echo." + DEPRECATED_KEY + "=true");
         LogUtil.start();
         deprecatedFilter.invoke(new MyInvoker<DemoService>(url), new MockInvocation());
-        assertEquals(1,
-                LogUtil.findMessage("The service method org.apache.dubbo.rpc.support.DemoService.echo(String) is DEPRECATED"));
+        assertEquals(
+                1,
+                LogUtil.findMessage(
+                        "The service method org.apache.dubbo.rpc.support.DemoService.echo(String) is DEPRECATED"));
         LogUtil.stop();
     }
 }

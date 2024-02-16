@@ -18,6 +18,7 @@ package org.apache.dubbo.remoting;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.Adaptive;
+import org.apache.dubbo.common.extension.ExtensionScope;
 import org.apache.dubbo.common.extension.SPI;
 import org.apache.dubbo.remoting.transport.dispatcher.all.AllDispatcher;
 
@@ -26,19 +27,18 @@ import org.apache.dubbo.remoting.transport.dispatcher.all.AllDispatcher;
  * SPI加载，单例，线程安全
  * 默认扩展点all
  */
-@SPI(AllDispatcher.NAME)
+@SPI(value = AllDispatcher.NAME, scope = ExtensionScope.FRAMEWORK)
 public interface Dispatcher {
 
     /**
      * dispatch the message to threadpool.
-	 * Dubbo的线程模型：http://dubbo.apache.org/zh-cn/docs/user/demos/thread-model.html
-	 * 避免IO发生阻塞，对事件处理较慢的请求，需要发送
+     * Dubbo的线程模型：http://dubbo.apache.org/zh-cn/docs/user/demos/thread-model.html
+     * 避免IO发生阻塞，对事件处理较慢的请求，需要发送
      * @param handler
      * @param url
      * @return channel handler
      */
-	@Adaptive({Constants.DISPATCHER_KEY, "dispather", "channel.handler"})
-	// The last two parameters are reserved for compatibility with the old configuration
-	ChannelHandler dispatch(ChannelHandler handler, URL url);
-
+    @Adaptive({Constants.DISPATCHER_KEY, "dispather", "channel.handler"})
+    // The last two parameters are reserved for compatibility with the old configuration
+    ChannelHandler dispatch(ChannelHandler handler, URL url);
 }

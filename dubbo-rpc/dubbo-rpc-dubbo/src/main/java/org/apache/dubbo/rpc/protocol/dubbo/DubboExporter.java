@@ -38,14 +38,13 @@ public class DubboExporter<T> extends AbstractExporter<T> {
         super(invoker);
         this.key = key;
         this.exporterMap = exporterMap;
+        exporterMap.put(key, this);
     }
 
     @Override
-    public void unexport() {
-		// 取消暴露
-        super.unexport();
-		// 从已经暴露的集合中删除暴露服务
-        exporterMap.remove(key);
+    public void afterUnExport() {
+        // 从已经暴露的集合中删除暴露服务
+        exporterMap.remove(key, this);
     }
 
 }

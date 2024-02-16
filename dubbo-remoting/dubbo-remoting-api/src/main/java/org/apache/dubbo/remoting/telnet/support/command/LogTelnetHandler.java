@@ -44,12 +44,12 @@ public class LogTelnetHandler implements TelnetHandler {
     public String telnet(Channel channel, String message) {
         long size = 0;
         File file = LoggerFactory.getFile();
-        StringBuffer buf = new StringBuffer();
+        StringBuilder buf = new StringBuilder();
         if (message == null || message.trim().length() == 0) {
             buf.append("EXAMPLE: log error / log 100");
         } else {
             String[] str = message.split(" ");
-            if (!StringUtils.isInteger(str[0])) {
+            if (!StringUtils.isNumber(str[0])) {
                 LoggerFactory.setLevel(Level.valueOf(message.toUpperCase()));
             } else {
                 int showLogLength = Integer.parseInt(str[0]);
@@ -69,12 +69,15 @@ public class LogTelnetHandler implements TelnetHandler {
                                     filechannel.read(bb, pos);
                                 }
                                 bb.flip();
-                                String content = new String(bb.array()).replace("<", "&lt;")
-                                        .replace(">", "&gt;").replace("\n", "<br/><br/>");
+                                String content = new String(bb.array())
+                                        .replace("<", "&lt;")
+                                        .replace(">", "&gt;")
+                                        .replace("\n", "<br/><br/>");
                                 buf.append("\r\ncontent:" + content);
 
-                                buf.append("\r\nmodified:" + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-                                        .format(new Date(file.lastModified()))));
+                                buf.append("\r\nmodified:"
+                                        + (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                                                .format(new Date(file.lastModified()))));
                                 buf.append("\r\nsize:" + size + "\r\n");
                             }
                         }
@@ -91,5 +94,4 @@ public class LogTelnetHandler implements TelnetHandler {
                 .append("\r\nCURRENT LOG APPENDER:" + (file == null ? "console" : file.getAbsolutePath()));
         return buf.toString();
     }
-
 }

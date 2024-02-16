@@ -17,6 +17,7 @@
 package org.apache.dubbo.rpc;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.utils.ConcurrentHashMapUtils;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -32,10 +33,14 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class RpcStatus {
 
-    private static final ConcurrentMap<String, RpcStatus> SERVICE_STATISTICS = new ConcurrentHashMap<String, RpcStatus>();
+    private static final ConcurrentMap<String, RpcStatus> SERVICE_STATISTICS =
+            new ConcurrentHashMap<String, RpcStatus>();
 
-    private static final ConcurrentMap<String, ConcurrentMap<String, RpcStatus>> METHOD_STATISTICS = new ConcurrentHashMap<String, ConcurrentMap<String, RpcStatus>>();
+    private static final ConcurrentMap<String, ConcurrentMap<String, RpcStatus>> METHOD_STATISTICS =
+            new ConcurrentHashMap<String, ConcurrentMap<String, RpcStatus>>();
+
     private final ConcurrentMap<String, Object> values = new ConcurrentHashMap<String, Object>();
+
     private final AtomicInteger active = new AtomicInteger();
     private final AtomicLong total = new AtomicLong();
     private final AtomicInteger failed = new AtomicInteger();
@@ -45,8 +50,7 @@ public class RpcStatus {
     private final AtomicLong failedMaxElapsed = new AtomicLong();
     private final AtomicLong succeededMaxElapsed = new AtomicLong();
 
-    private RpcStatus() {
-    }
+    private RpcStatus() {}
 
     /**
      * @param url
@@ -54,12 +58,7 @@ public class RpcStatus {
      */
     public static RpcStatus getStatus(URL url) {
         String uri = url.toIdentityString();
-        RpcStatus status = SERVICE_STATISTICS.get(uri);
-        if (status == null) {
-            SERVICE_STATISTICS.putIfAbsent(uri, new RpcStatus());
-            status = SERVICE_STATISTICS.get(uri);
-        }
-        return status;
+        return ConcurrentHashMapUtils.computeIfAbsent(SERVICE_STATISTICS, uri, key -> new RpcStatus());
     }
 
     /**
@@ -77,17 +76,9 @@ public class RpcStatus {
      */
     public static RpcStatus getStatus(URL url, String methodName) {
         String uri = url.toIdentityString();
-        ConcurrentMap<String, RpcStatus> map = METHOD_STATISTICS.get(uri);
-        if (map == null) {
-            METHOD_STATISTICS.putIfAbsent(uri, new ConcurrentHashMap<String, RpcStatus>());
-            map = METHOD_STATISTICS.get(uri);
-        }
-        RpcStatus status = map.get(methodName);
-        if (status == null) {
-            map.putIfAbsent(methodName, new RpcStatus());
-            status = map.get(methodName);
-        }
-        return status;
+        ConcurrentMap<String, RpcStatus> map =
+                ConcurrentHashMapUtils.computeIfAbsent(METHOD_STATISTICS, uri, k -> new ConcurrentHashMap<>());
+        return ConcurrentHashMapUtils.computeIfAbsent(map, methodName, k -> new RpcStatus());
     }
 
     /**
@@ -115,13 +106,21 @@ public class RpcStatus {
         if (methodStatus.active.get() == Integer.MAX_VALUE) {
             return false;
         }
-        if (methodStatus.active.incrementAndGet() > max) {
-            methodStatus.active.decrementAndGet();
-            return false;
-        } else {
-            appStatus.active.incrementAndGet();
-            return true;
+        for (int i; ; ) {
+            i = methodStatus.active.get();
+
+            if (i == Integer.MAX_VALUE || i + 1 > max) {
+                return false;
+            }
+
+            if (methodStatus.active.compareAndSet(i, i + 1)) {
+                break;
+            }
         }
+
+        appStatus.active.incrementAndGet();
+
+        return true;
     }
 
     /**
@@ -138,13 +137,16 @@ public class RpcStatus {
         status.active.decrementAndGet();
         status.total.incrementAndGet();
         status.totalElapsed.addAndGet(elapsed);
+
         if (status.maxElapsed.get() < elapsed) {
             status.maxElapsed.set(elapsed);
         }
+
         if (succeeded) {
             if (status.succeededMaxElapsed.get() < elapsed) {
                 status.succeededMaxElapsed.set(elapsed);
             }
+
         } else {
             status.failed.incrementAndGet();
             status.failedElapsed.addAndGet(elapsed);
@@ -314,6 +316,4 @@ public class RpcStatus {
         }
         return getTotal();
     }
-
-
 }

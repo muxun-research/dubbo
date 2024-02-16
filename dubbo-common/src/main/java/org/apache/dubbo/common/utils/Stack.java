@@ -23,14 +23,12 @@ import java.util.List;
 /**
  * Stack.
  */
-
 public class Stack<E> {
     private int mSize = 0;
 
-    private List<E> mElements = new ArrayList<E>();
+    private final List<E> mElements = new ArrayList<E>();
 
-    public Stack() {
-    }
+    public Stack() {}
 
     /**
      * push.
@@ -77,7 +75,7 @@ public class Stack<E> {
      * @return element.
      */
     public E get(int index) {
-        if (index >= mSize) {
+        if (index >= mSize || index + mSize < 0) {
             throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + mSize);
         }
 
@@ -92,7 +90,7 @@ public class Stack<E> {
      * @return old element.
      */
     public E set(int index, E value) {
-        if (index >= mSize) {
+        if (index >= mSize || index + mSize < 0) {
             throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + mSize);
         }
 
@@ -106,7 +104,7 @@ public class Stack<E> {
      * @return element
      */
     public E remove(int index) {
-        if (index >= mSize) {
+        if (index >= mSize || index + mSize < 0) {
             throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + mSize);
         }
 

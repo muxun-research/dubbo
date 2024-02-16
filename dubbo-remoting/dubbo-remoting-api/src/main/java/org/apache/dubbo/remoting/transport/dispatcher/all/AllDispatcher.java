@@ -32,5 +32,4 @@ public class AllDispatcher implements Dispatcher {
 		// 创建AllChannelHandler
         return new AllChannelHandler(handler, url);
     }
-
 }

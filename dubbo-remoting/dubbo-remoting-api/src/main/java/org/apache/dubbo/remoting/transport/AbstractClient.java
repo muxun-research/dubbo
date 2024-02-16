@@ -18,10 +18,9 @@ package org.apache.dubbo.remoting.transport;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
-import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.store.DataStore;
+import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
 import org.apache.dubbo.common.utils.ExecutorUtil;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Channel;
@@ -36,9 +35,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER_SIDE;
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_CLIENT_THREADPOOL;
+import static org.apache.dubbo.common.constants.CommonConstants.LAZY_CONNECT_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.THREADPOOL_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.THREAD_NAME_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.TRANSPORT_FAILED_CLOSE;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.TRANSPORT_FAILED_CONNECT_PROVIDER;
+import static org.apache.dubbo.config.Constants.CLIENT_THREAD_POOL_NAME;
 
 /**
  * 客户端抽象类
@@ -46,58 +49,95 @@ import static org.apache.dubbo.common.constants.CommonConstants.THREADPOOL_KEY;
  */
 public abstract class AbstractClient extends AbstractEndpoint implements Client {
 
-    protected static final String CLIENT_THREAD_POOL_NAME = "DubboClientHandler";
-    private static final Logger logger = LoggerFactory.getLogger(AbstractClient.class);
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(AbstractClient.class);
+
     private final Lock connectLock = new ReentrantLock();
+
     private final boolean needReconnect;
+
     protected volatile ExecutorService executor;
 
-	/**
-	 * 池化Client
-	 * 比如初始化NettyClient时，就会调用这个方法
-	 */
-	public AbstractClient(URL url, ChannelHandler handler) throws RemotingException {
-		super(url, handler);
-		// 是否需要重连
-		needReconnect = url.getParameter(Constants.SEND_RECONNECT_KEY, false);
+    /**
+     * 池化Client
+     * 比如初始化NettyClient时，就会调用这个方法
+     */
+    public AbstractClient(URL url, ChannelHandler handler) throws RemotingException {
+        super(url, handler);
+        // set default needReconnect true when channel is not connected
+        needReconnect = url.getParameter(Constants.SEND_RECONNECT_KEY, true);
 
-		try {
-			// 打开连接设备
-			// 示例：Netty4将会启动Bootstrap
-			doOpen();
-		} catch (Throwable t) {
-			// 如果启动失败，执行关闭，并抛出异常
-			close();
-			throw new RemotingException(url.toInetSocketAddress(), null,
-					"Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
-							+ " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
-		}
-		try {
-			// 连接指定的服务器
-			connect();
-			if (logger.isInfoEnabled()) {
-				logger.info("Start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress() + " connect to the server " + getRemoteAddress());
-			}
-		} catch (RemotingException t) {
-			if (url.getParameter(Constants.CHECK_KEY, true)) {
-				close();
-				throw t;
-			} else {
-				logger.warn("Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
-						+ " connect to the server " + getRemoteAddress() + " (check == false, ignore and retry later!), cause: " + t.getMessage(), t);
-			}
-		} catch (Throwable t) {
-			close();
-			throw new RemotingException(url.toInetSocketAddress(), null,
-					"Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
-							+ " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(), t);
-		}
-		// 获取消费者线程池
-		executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class)
-				.getDefaultExtension().get(CONSUMER_SIDE, Integer.toString(url.getPort()));
-		ExtensionLoader.getExtensionLoader(DataStore.class)
-				.getDefaultExtension().remove(CONSUMER_SIDE, Integer.toString(url.getPort()));
-	}
+        initExecutor(url);
+
+        try {
+            // 打开连接设备
+            // 示例：Netty4将会启动Bootstrap
+            doOpen();
+        } catch (Throwable t) {
+            close();
+            throw new RemotingException(
+                    url.toInetSocketAddress(),
+                    null,
+                    "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+                            + " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(),
+                    t);
+        }
+
+        try {
+            // 连接指定的服务器
+            connect();
+            if (logger.isInfoEnabled()) {
+                logger.info("Start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+                        + " connect to the server " + getRemoteAddress());
+            }
+        } catch (RemotingException t) {
+            // If lazy connect client fails to establish a connection, the client instance will still be created,
+            // and the reconnection will be initiated by ReconnectTask, so there is no need to throw an exception
+            if (url.getParameter(LAZY_CONNECT_KEY, false)) {
+                logger.warn(
+                        TRANSPORT_FAILED_CONNECT_PROVIDER,
+                        "",
+                        "",
+                        "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+                                + " connect to the server "
+                                + getRemoteAddress()
+                                + " (the connection request is initiated by lazy connect client, ignore and retry later!), cause: "
+                                + t.getMessage(),
+                        t);
+                return;
+            }
+
+            if (url.getParameter(Constants.CHECK_KEY, true)) {
+                close();
+                throw t;
+            } else {
+                logger.warn(
+                        TRANSPORT_FAILED_CONNECT_PROVIDER,
+                        "",
+                        "",
+                        "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+                                + " connect to the server " + getRemoteAddress()
+                                + " (check == false, ignore and retry later!), cause: " + t.getMessage(),
+                        t);
+            }
+        } catch (Throwable t) {
+            close();
+            throw new RemotingException(
+                    url.toInetSocketAddress(),
+                    null,
+                    "Failed to start " + getClass().getSimpleName() + " " + NetUtils.getLocalAddress()
+                            + " connect to the server " + getRemoteAddress() + ", cause: " + t.getMessage(),
+                    t);
+        }
+    }
+
+    private void initExecutor(URL url) {
+        ExecutorRepository executorRepository = ExecutorRepository.getInstance(url.getOrDefaultApplicationModel());
+
+        // 获取消费者线程池
+        url = url.addParameter(THREAD_NAME_KEY, CLIENT_THREAD_POOL_NAME)
+                .addParameterIfAbsent(THREADPOOL_KEY, DEFAULT_CLIENT_THREADPOOL);
+        executor = executorRepository.createExecutorIfAbsent(url);
+    }
 
     protected static ChannelHandler wrapChannelHandler(URL url, ChannelHandler handler) {
 		// 设置线程池的名称，放入到URL中
@@ -182,7 +222,7 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
             connect();
         }
         Channel channel = getChannel();
-        //TODO Can the value returned by getChannel() be null? need improvement.
+        // TODO Can the value returned by getChannel() be null? need improvement.
         if (channel == null || !channel.isConnected()) {
             throw new RemotingException(this, "message can not send, because channel is closed . url:" + getUrl());
         }
@@ -199,16 +239,32 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                 return;
 			}
 			// 执行连接
+
+            if (isClosed() || isClosing()) {
+                logger.warn(
+                        TRANSPORT_FAILED_CONNECT_PROVIDER,
+                        "",
+                        "",
+                        "No need to connect to server " + getRemoteAddress() + " from "
+                                + getClass().getSimpleName() + " " + NetUtils.getLocalHost() + " using dubbo version "
+                                + Version.getVersion() + ", cause: client status is closed or closing.");
+                return;
+            }
+
             doConnect();
 
             if (!isConnected()) {
-                throw new RemotingException(this, "Failed connect to server " + getRemoteAddress() + " from " + getClass().getSimpleName() + " "
-                        + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
-                        + ", cause: Connect wait timeout: " + getConnectTimeout() + "ms.");
+                throw new RemotingException(
+                        this,
+                        "Failed to connect to server " + getRemoteAddress() + " from "
+                                + getClass().getSimpleName() + " "
+                                + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
+                                + ", cause: Connect wait timeout: " + getConnectTimeout() + "ms.");
 
             } else {
                 if (logger.isInfoEnabled()) {
-                    logger.info("Succeed connect to server " + getRemoteAddress() + " from " + getClass().getSimpleName() + " "
+                    logger.info("Successfully connect to server " + getRemoteAddress() + " from "
+                            + getClass().getSimpleName() + " "
                             + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
                             + ", channel is " + this.getChannel());
                 }
@@ -218,9 +274,13 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
             throw e;
 
         } catch (Throwable e) {
-            throw new RemotingException(this, "Failed connect to server " + getRemoteAddress() + " from " + getClass().getSimpleName() + " "
-                    + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
-                    + ", cause: " + e.getMessage(), e);
+            throw new RemotingException(
+                    this,
+                    "Failed to connect to server " + getRemoteAddress() + " from "
+                            + getClass().getSimpleName() + " "
+                            + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion()
+                            + ", cause: " + e.getMessage(),
+                    e);
 
         } finally {
 			// 释放锁
@@ -237,12 +297,12 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
                     channel.close();
                 }
             } catch (Throwable e) {
-                logger.warn(e.getMessage(), e);
+                logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
             }
             try {
                 doDisConnect();
             } catch (Throwable e) {
-                logger.warn(e.getMessage(), e);
+                logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
             }
         } finally {
             connectLock.unlock();
@@ -251,52 +311,66 @@ public abstract class AbstractClient extends AbstractEndpoint implements Client 
 
     @Override
     public void reconnect() throws RemotingException {
-        if (!isConnected()) {
-            connectLock.lock();
-            try {
-                if (!isConnected()) {
-                    disconnect();
-                    connect();
-                }
-            } finally {
-                connectLock.unlock();
-            }
+        connectLock.lock();
+        try {
+            disconnect();
+            connect();
+        } finally {
+            connectLock.unlock();
         }
     }
 
     @Override
     public void close() {
-
-        try {
-            super.close();
-        } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+        if (isClosed()) {
+            logger.warn(
+                    TRANSPORT_FAILED_CONNECT_PROVIDER,
+                    "",
+                    "",
+                    "No need to close connection to server " + getRemoteAddress() + " from "
+                            + getClass().getSimpleName() + " " + NetUtils.getLocalHost() + " using dubbo version "
+                            + Version.getVersion() + ", cause: the client status is closed.");
+            return;
         }
 
+        connectLock.lock();
         try {
-            if (executor != null) {
-                ExecutorUtil.shutdownNow(executor, 100);
+            if (isClosed()) {
+                logger.warn(
+                        TRANSPORT_FAILED_CONNECT_PROVIDER,
+                        "",
+                        "",
+                        "No need to close connection to server " + getRemoteAddress() + " from "
+                                + getClass().getSimpleName() + " " + NetUtils.getLocalHost() + " using dubbo version "
+                                + Version.getVersion() + ", cause: the client status is closed.");
+                return;
             }
-        } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
-        }
 
-        try {
-            disconnect();
-        } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
-        }
+            try {
+                super.close();
+            } catch (Throwable e) {
+                logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
+            }
 
-        try {
-            doClose();
-        } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            try {
+                disconnect();
+            } catch (Throwable e) {
+                logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
+            }
+
+            try {
+                doClose();
+            } catch (Throwable e) {
+                logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
+            }
+
+        } finally {
+            connectLock.unlock();
         }
     }
 
     @Override
     public void close(int timeout) {
-        ExecutorUtil.gracefulShutdown(executor, timeout);
         close();
     }
 

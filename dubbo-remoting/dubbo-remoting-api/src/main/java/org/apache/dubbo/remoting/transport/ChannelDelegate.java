@@ -122,5 +122,4 @@ public class ChannelDelegate implements Channel {
     public boolean isClosed() {
         return channel.isClosed();
     }
-
 }

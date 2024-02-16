@@ -17,24 +17,30 @@
 package org.apache.dubbo.rpc.cluster.directory;
 
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.cluster.RouterChain;
+import org.apache.dubbo.rpc.cluster.SingleRouterChain;
+import org.apache.dubbo.rpc.cluster.router.state.BitList;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CLUSTER_FAILED_SITE_SELECTION;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTER_MODE_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_KEY;
 
 /**
  * 静态目录，仅会从缓存中获取
  */
 public class StaticDirectory<T> extends AbstractDirectory<T> {
-    private static final Logger logger = LoggerFactory.getLogger(StaticDirectory.class);
-
-    private final List<Invoker<T>> invokers;
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(StaticDirectory.class);
+    private final Class<T> interfaceClass;
 
     public StaticDirectory(List<Invoker<T>> invokers) {
         this(null, invokers, null);
@@ -49,16 +55,27 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
     }
 
     public StaticDirectory(URL url, List<Invoker<T>> invokers, RouterChain<T> routerChain) {
-        super(url == null && CollectionUtils.isNotEmpty(invokers) ? invokers.get(0).getUrl() : url, routerChain);
+        super(
+                url == null && CollectionUtils.isNotEmpty(invokers)
+                        ? invokers.get(0).getUrl()
+                        : url,
+                routerChain,
+                false);
         if (CollectionUtils.isEmpty(invokers)) {
             throw new IllegalArgumentException("invokers == null");
         }
-        this.invokers = invokers;
+        this.setInvokers(new BitList<>(invokers));
+        this.interfaceClass = invokers.get(0).getInterface();
     }
 
     @Override
     public Class<T> getInterface() {
-        return invokers.get(0).getInterface();
+        return interfaceClass;
+    }
+
+    @Override
+    public List<Invoker<T>> getAllInvokers() {
+        return getInvokers();
     }
 
     @Override
@@ -66,9 +83,11 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
         if (isDestroyed()) {
             return false;
         }
-        for (Invoker<T> invoker : invokers) {
+        for (Invoker<T> invoker : getValidInvokers()) {
             if (invoker.isAvailable()) {
                 return true;
+            } else {
+                addInvalidateInvoker(invoker);
             }
         }
         return false;
@@ -79,34 +98,57 @@ public class StaticDirectory<T> extends AbstractDirectory<T> {
         if (isDestroyed()) {
             return;
         }
-        super.destroy();
-        for (Invoker<T> invoker : invokers) {
+        for (Invoker<T> invoker : getInvokers()) {
             invoker.destroy();
         }
-        invokers.clear();
+        super.destroy();
     }
 
     public void buildRouterChain() {
-        RouterChain<T> routerChain = RouterChain.buildChain(getUrl());
-        routerChain.setInvokers(invokers);
+        RouterChain<T> routerChain = RouterChain.buildChain(getInterface(), getUrl());
+        routerChain.setInvokers(getInvokers(), () -> {});
         this.setRouterChain(routerChain);
     }
 
-	/**
-	 * 本地文件指定式
-	 */
-	@Override
-	protected List<Invoker<T>> doList(Invocation invocation) throws RpcException {
-		List<Invoker<T>> finalInvokers = invokers;
-		if (routerChain != null) {
-			try {
-				// 使用routerChain筛选invokers
-				finalInvokers = routerChain.route(getConsumerUrl(), invocation);
-			} catch (Throwable t) {
-				logger.error("Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(), t);
-			}
-		}
-		return finalInvokers == null ? Collections.emptyList() : finalInvokers;
-	}
+    public void notify(List<Invoker<T>> invokers) {
+        BitList<Invoker<T>> bitList = new BitList<>(invokers);
+        if (routerChain != null) {
+            refreshRouter(bitList.clone(), () -> this.setInvokers(bitList));
+        } else {
+            this.setInvokers(bitList);
+        }
+    }
 
+    /**
+     * 本地文件指定式
+     */
+    @Override
+    protected List<Invoker<T>> doList(
+            SingleRouterChain<T> singleRouterChain, BitList<Invoker<T>> invokers, Invocation invocation)
+            throws RpcException {
+        if (singleRouterChain != null) {
+            try {
+                // 使用routerChain筛选invokers
+                List<Invoker<T>> finalInvokers = singleRouterChain.route(getConsumerUrl(), invokers, invocation);
+                return finalInvokers == null ? BitList.emptyList() : finalInvokers;
+            } catch (Throwable t) {
+                logger.error(
+                        CLUSTER_FAILED_SITE_SELECTION,
+                        "Failed to execute router",
+                        "",
+                        "Failed to execute router: " + getUrl() + ", cause: " + t.getMessage(),
+                        t);
+                return BitList.emptyList();
+            }
+        }
+        return invokers;
+    }
+
+    @Override
+    protected Map<String, String> getDirectoryMeta() {
+        Map<String, String> metas = new HashMap<>();
+        metas.put(REGISTRY_KEY, "static");
+        metas.put(REGISTER_MODE_KEY, "static");
+        return metas;
+    }
 }

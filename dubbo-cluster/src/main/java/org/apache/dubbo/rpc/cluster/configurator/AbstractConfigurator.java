@@ -17,10 +17,14 @@
 package org.apache.dubbo.rpc.cluster.configurator;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.constants.CommonConstants;
+import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.rpc.cluster.Configurator;
+import org.apache.dubbo.rpc.cluster.configurator.parser.model.ConditionMatch;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -32,6 +36,7 @@ import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER;
 import static org.apache.dubbo.common.constants.CommonConstants.ENABLED_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.INTERFACES;
 import static org.apache.dubbo.common.constants.CommonConstants.PROVIDER;
 import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
@@ -40,11 +45,15 @@ import static org.apache.dubbo.common.constants.RegistryConstants.COMPATIBLE_CON
 import static org.apache.dubbo.common.constants.RegistryConstants.DYNAMIC_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.CONFIG_VERSION_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.OVERRIDE_PROVIDERS_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.RULE_VERSION_V30;
+import static org.apache.dubbo.rpc.cluster.configurator.parser.model.ConfiguratorConfig.MATCH_CONDITION;
 
 /**
  * 配置信息的抽象类
  */
 public abstract class AbstractConfigurator implements Configurator {
+    private static final Logger logger = LoggerFactory.getLogger(AbstractConfigurator.class);
+    private static final String TILDE = "~";
 
     private final URL configuratorUrl;
 
@@ -65,33 +74,36 @@ public abstract class AbstractConfigurator implements Configurator {
 
     @Override
     public URL configure(URL url) {
-		// 如果需要复写的url不可用，或者处于非法状态，直接返回该URL
-        if (!configuratorUrl.getParameter(ENABLED_KEY, true) || configuratorUrl.getHost() == null || url == null || url.getHost() == null) {
+        // 如果需要复写的url不可用，或者处于非法状态，直接返回该URL
+        if (!configuratorUrl.getParameter(ENABLED_KEY, true)
+                || configuratorUrl.getHost() == null
+                || url == null
+                || url.getHost() == null) {
+            logger.info("Cannot apply configurator rule, the rule is disabled or is invalid: \n" + configuratorUrl);
             return url;
         }
-		/**
-		 * 接下来的内容始于2.7.0版本
-		 */
-		// 获取版本信息
+        /**
+         * 接下来的内容始于2.7.0版本
+         */
+        // 获取版本信息
         String apiVersion = configuratorUrl.getParameter(CONFIG_VERSION_KEY);
-        if (StringUtils.isNotEmpty(apiVersion)) {
-			// 获取身份信息
-            String currentSide = url.getParameter(SIDE_KEY);
-			// 根据身份信息获取配置身份信息
-            String configuratorSide = configuratorUrl.getParameter(SIDE_KEY);
-			// 如果身份信息和配置身份信息相同，并且是消费者，并且配置信息没有指定端口
-			// 如果复写的url中带有端口信息，证明是一个provider侧的地址，我们想要通过复写url来控制一个指定的provider
-			// 生效于指定的provider实例，或者控制这个provider的consumer
-            if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide) && 0 == configuratorUrl.getPort()) {
-				// NetUtils.getLocalHost()是消费者注册到注册中心的地址
+        if (StringUtils.isNotEmpty(apiVersion)) { // v2.7 or above
+            // 获取身份信息
+            String currentSide = url.getSide();
+            // 根据身份信息获取配置身份信息
+            String configuratorSide = configuratorUrl.getSide();
+            // 如果身份信息和配置身份信息相同，并且是消费者，并且配置信息没有指定端口
+            // 如果复写的url中带有端口信息，证明是一个provider侧的地址，我们想要通过复写url来控制一个指定的provider
+            // 生效于指定的provider实例，或者控制这个provider的consumer
+            if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide)) {
+                // NetUtils.getLocalHost()是消费者注册到注册中心的地址
                 url = configureIfMatch(NetUtils.getLocalHost(), url);
-            } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide) && url.getPort() == configuratorUrl.getPort()) {
-
+            } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide)) {
                 url = configureIfMatch(url.getHost(), url);
             }
         }
-		/**
-		 * 此处的else分支已经失效，现在只是为了保证2.7.0版本之前的完整性
+        /*
+         * 此处的else分支已经失效，现在只是为了保证2.7.0版本之前的完整性
          */
         else {
             url = configureDeprecated(url);
@@ -101,18 +113,25 @@ public abstract class AbstractConfigurator implements Configurator {
 
     @Deprecated
     private URL configureDeprecated(URL url) {
-        // If override url has port, means it is a provider address. We want to control a specific provider with this override url, it may take effect on the specific provider instance or on consumers holding this provider instance.
+        // If override url has port, means it is a provider address. We want to control a specific provider with this
+        // override url, it may take effect on the specific provider instance or on consumers holding this provider
+        // instance.
         if (configuratorUrl.getPort() != 0) {
             if (url.getPort() == configuratorUrl.getPort()) {
                 return configureIfMatch(url.getHost(), url);
             }
-        } else {// override url don't have a port, means the ip override url specify is a consumer address or 0.0.0.0
-            // 1.If it is a consumer ip address, the intention is to control a specific consumer instance, it must takes effect at the consumer side, any provider received this override url should ignore;
-            // 2.If the ip is 0.0.0.0, this override url can be used on consumer, and also can be used on provider
-            if (url.getParameter(SIDE_KEY, PROVIDER).equals(CONSUMER)) {
-                return configureIfMatch(NetUtils.getLocalHost(), url);// NetUtils.getLocalHost is the ip address consumer registered to registry.
-            } else if (url.getParameter(SIDE_KEY, CONSUMER).equals(PROVIDER)) {
-                return configureIfMatch(ANYHOST_VALUE, url);// take effect on all providers, so address must be 0.0.0.0, otherwise it won't flow to this if branch
+        } else {
+            /*
+             *  override url don't have a port, means the ip override url specify is a consumer address or 0.0.0.0.
+             *  1.If it is a consumer ip address, the intention is to control a specific consumer instance, it must takes effect at the consumer side, any provider received this override url should ignore.
+             *  2.If the ip is 0.0.0.0, this override url can be used on consumer, and also can be used on provider.
+             */
+            if (url.getSide(PROVIDER).equals(CONSUMER)) {
+                // NetUtils.getLocalHost is the ip address consumer registered to registry.
+                return configureIfMatch(NetUtils.getLocalHost(), url);
+            } else if (url.getSide(CONSUMER).equals(PROVIDER)) {
+                // take effect on all providers, so address must be 0.0.0.0, otherwise it won't flow to this if branch
+                return configureIfMatch(ANYHOST_VALUE, url);
             }
         }
         return url;
@@ -120,43 +139,120 @@ public abstract class AbstractConfigurator implements Configurator {
 
     private URL configureIfMatch(String host, URL url) {
         if (ANYHOST_VALUE.equals(configuratorUrl.getHost()) || host.equals(configuratorUrl.getHost())) {
-            // TODO, to support wildcards
-            String providers = configuratorUrl.getParameter(OVERRIDE_PROVIDERS_KEY);
-            if (StringUtils.isEmpty(providers) || providers.contains(url.getAddress()) || providers.contains(ANYHOST_VALUE)) {
-                String configApplication = configuratorUrl.getParameter(APPLICATION_KEY,
-                        configuratorUrl.getUsername());
-                String currentApplication = url.getParameter(APPLICATION_KEY, url.getUsername());
-                if (configApplication == null || ANY_VALUE.equals(configApplication)
-                        || configApplication.equals(currentApplication)) {
-                    Set<String> conditionKeys = new HashSet<String>();
-                    conditionKeys.add(CATEGORY_KEY);
-                    conditionKeys.add(Constants.CHECK_KEY);
-                    conditionKeys.add(DYNAMIC_KEY);
-                    conditionKeys.add(ENABLED_KEY);
-                    conditionKeys.add(GROUP_KEY);
-                    conditionKeys.add(VERSION_KEY);
-                    conditionKeys.add(APPLICATION_KEY);
-                    conditionKeys.add(SIDE_KEY);
-                    conditionKeys.add(CONFIG_VERSION_KEY);
-                    conditionKeys.add(COMPATIBLE_CONFIG_KEY);
-                    for (Map.Entry<String, String> entry : configuratorUrl.getParameters().entrySet()) {
-                        String key = entry.getKey();
-                        String value = entry.getValue();
-                        if (key.startsWith("~") || APPLICATION_KEY.equals(key) || SIDE_KEY.equals(key)) {
-                            conditionKeys.add(key);
-                            if (value != null && !ANY_VALUE.equals(value)
-                                    && !value.equals(url.getParameter(key.startsWith("~") ? key.substring(1) : key))) {
-                                return url;
-                            }
+            if (isV27ConditionMatchOrUnset(url)) {
+                Set<String> conditionKeys = genConditionKeys();
+                String apiVersion = configuratorUrl.getParameter(CONFIG_VERSION_KEY);
+                if (apiVersion != null && apiVersion.startsWith(RULE_VERSION_V30)) {
+                    ConditionMatch matcher = (ConditionMatch) configuratorUrl.getAttribute(MATCH_CONDITION);
+                    if (matcher != null) {
+                        if (matcher.isMatch(host, url)) {
+                            return doConfigure(url, configuratorUrl.removeParameters(conditionKeys));
+                        } else {
+                            logger.debug("Cannot apply configurator rule, param mismatch, current params are " + url
+                                    + ", params in rule is " + matcher);
                         }
+                    } else {
+                        return doConfigure(url, configuratorUrl.removeParameters(conditionKeys));
                     }
+                } else if (isDeprecatedConditionMatch(conditionKeys, url)) {
                     return doConfigure(url, configuratorUrl.removeParameters(conditionKeys));
                 }
             }
+        } else {
+            logger.debug("Cannot apply configurator rule, host mismatch, current host is " + host + ", host in rule is "
+                    + configuratorUrl.getHost());
         }
         return url;
     }
 
-    protected abstract URL doConfigure(URL currentUrl, URL configUrl);
+    /**
+     * Check if v2.7 configurator rule is set and can be matched.
+     *
+     * @param url the configurator rule url
+     * @return true if v2.7 configurator rule is not set or the rule can be matched.
+     */
+    private boolean isV27ConditionMatchOrUnset(URL url) {
+        String providers = configuratorUrl.getParameter(OVERRIDE_PROVIDERS_KEY);
+        if (StringUtils.isNotEmpty(providers)) {
+            boolean match = false;
+            String[] providerAddresses = providers.split(CommonConstants.COMMA_SEPARATOR);
+            for (String address : providerAddresses) {
+                if (address.equals(url.getAddress())
+                        || address.equals(ANYHOST_VALUE)
+                        || address.equals(ANYHOST_VALUE + CommonConstants.GROUP_CHAR_SEPARATOR + ANY_VALUE)
+                        || address.equals(ANYHOST_VALUE + CommonConstants.GROUP_CHAR_SEPARATOR + url.getPort())
+                        || address.equals(url.getHost())) {
+                    match = true;
+                }
+            }
+            if (!match) {
+                logger.debug("Cannot apply configurator rule, provider address mismatch, current address "
+                        + url.getAddress() + ", address in rule is " + providers);
+                return false;
+            }
+        }
 
+        String configApplication = configuratorUrl.getApplication(configuratorUrl.getUsername());
+        String currentApplication = url.getApplication(url.getUsername());
+        if (configApplication != null
+                && !ANY_VALUE.equals(configApplication)
+                && !configApplication.equals(currentApplication)) {
+            logger.debug("Cannot apply configurator rule, application name mismatch, current application is "
+                    + currentApplication + ", application in rule is " + configApplication);
+            return false;
+        }
+
+        String configServiceKey = configuratorUrl.getServiceKey();
+        String currentServiceKey = url.getServiceKey();
+        if (!ANY_VALUE.equals(configServiceKey) && !configServiceKey.equals(currentServiceKey)) {
+            logger.debug("Cannot apply configurator rule, service mismatch, current service is " + currentServiceKey
+                    + ", service in rule is " + configServiceKey);
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean isDeprecatedConditionMatch(Set<String> conditionKeys, URL url) {
+        boolean result = true;
+        for (Map.Entry<String, String> entry : configuratorUrl.getParameters().entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            boolean startWithTilde = startWithTilde(key);
+            if (startWithTilde || APPLICATION_KEY.equals(key) || SIDE_KEY.equals(key)) {
+                if (startWithTilde) {
+                    conditionKeys.add(key);
+                }
+                if (value != null
+                        && !ANY_VALUE.equals(value)
+                        && !value.equals(url.getParameter(startWithTilde ? key.substring(1) : key))) {
+                    result = false;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    private Set<String> genConditionKeys() {
+        Set<String> conditionKeys = new HashSet<String>();
+        conditionKeys.add(CATEGORY_KEY);
+        conditionKeys.add(Constants.CHECK_KEY);
+        conditionKeys.add(DYNAMIC_KEY);
+        conditionKeys.add(ENABLED_KEY);
+        conditionKeys.add(GROUP_KEY);
+        conditionKeys.add(VERSION_KEY);
+        conditionKeys.add(APPLICATION_KEY);
+        conditionKeys.add(SIDE_KEY);
+        conditionKeys.add(CONFIG_VERSION_KEY);
+        conditionKeys.add(COMPATIBLE_CONFIG_KEY);
+        conditionKeys.add(INTERFACES);
+        return conditionKeys;
+    }
+
+    private boolean startWithTilde(String key) {
+        return StringUtils.isNotEmpty(key) && key.startsWith(TILDE);
+    }
+
+    protected abstract URL doConfigure(URL currentUrl, URL configUrl);
 }

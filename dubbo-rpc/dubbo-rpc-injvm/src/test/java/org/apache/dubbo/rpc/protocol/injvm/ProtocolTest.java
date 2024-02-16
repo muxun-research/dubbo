@@ -21,6 +21,8 @@ import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Protocol;
 import org.apache.dubbo.rpc.ProxyFactory;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.FrameworkModel;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +30,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ProtocolTest {
+class ProtocolTest {
 
     IEcho echo = new IEcho() {
         public String echo(String e) {
@@ -37,20 +39,25 @@ public class ProtocolTest {
     };
 
     static {
-        InjvmProtocol injvm = InjvmProtocol.getInjvmProtocol();
+        InjvmProtocol injvm = InjvmProtocol.getInjvmProtocol(FrameworkModel.defaultModel());
     }
 
-    ProxyFactory proxyFactory = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getExtension("javassist");
+    ProxyFactory proxyFactory =
+            ExtensionLoader.getExtensionLoader(ProxyFactory.class).getExtension("javassist");
 
-    URL url = URL.valueOf("injvm://localhost:0/org.apache.dubbo.rpc.support.IEcho?interface=org.apache.dubbo.rpc.support.IEcho");
+    URL url = URL.valueOf(
+                    "injvm://localhost:0/org.apache.dubbo.rpc.support.IEcho?interface=org.apache.dubbo.rpc.support.IEcho")
+            .setScopeModel(ApplicationModel.defaultModel().getDefaultModule());
 
     Invoker<IEcho> invoker = proxyFactory.getInvoker(echo, IEcho.class, url);
 
     @Test
-    public void test_destroyWontCloseAllProtocol() throws Exception {
-        Protocol autowireProtocol = ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
+    void test_destroyWontCloseAllProtocol() throws Exception {
+        Protocol autowireProtocol =
+                ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
 
-        Protocol InjvmProtocol = ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("injvm");
+        Protocol InjvmProtocol =
+                ExtensionLoader.getExtensionLoader(Protocol.class).getExtension("injvm");
 
         assertEquals(0, InjvmProtocol.getDefaultPort());
 
@@ -64,7 +71,9 @@ public class ProtocolTest {
         try {
             autowireProtocol.destroy();
         } catch (UnsupportedOperationException expected) {
-            assertThat(expected.getMessage(), containsString("of interface org.apache.dubbo.rpc.Protocol is not adaptive method!"));
+            assertThat(
+                    expected.getMessage(),
+                    containsString("of interface org.apache.dubbo.rpc.Protocol is not adaptive method!"));
         }
 
         assertEquals("ok2", echoProxy.echo("ok2"));

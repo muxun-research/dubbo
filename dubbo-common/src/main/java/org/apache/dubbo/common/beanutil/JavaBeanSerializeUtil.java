@@ -18,6 +18,7 @@ package org.apache.dubbo.common.beanutil;
 
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.utils.DefaultSerializeClassChecker;
 import org.apache.dubbo.common.utils.LogHelper;
 import org.apache.dubbo.common.utils.ReflectUtils;
 
@@ -58,8 +59,7 @@ public final class JavaBeanSerializeUtil {
         TYPES.put("S", short.class);
     }
 
-    private JavaBeanSerializeUtil() {
-    }
+    private JavaBeanSerializeUtil() {}
 
     public static JavaBeanDescriptor serialize(Object obj) {
         return serialize(obj, JavaBeanAccessor.FIELD);
@@ -104,8 +104,8 @@ public final class JavaBeanSerializeUtil {
         return new JavaBeanDescriptor(cl.getName(), JavaBeanDescriptor.TYPE_BEAN);
     }
 
-    private static JavaBeanDescriptor createDescriptorIfAbsent(Object obj, JavaBeanAccessor accessor,
-                                                               IdentityHashMap<Object, JavaBeanDescriptor> cache) {
+    private static JavaBeanDescriptor createDescriptorIfAbsent(
+            Object obj, JavaBeanAccessor accessor, IdentityHashMap<Object, JavaBeanDescriptor> cache) {
         if (cache.containsKey(obj)) {
             return cache.get(obj);
         }
@@ -120,8 +120,11 @@ public final class JavaBeanSerializeUtil {
         return result;
     }
 
-    private static void serializeInternal(JavaBeanDescriptor descriptor, Object obj, JavaBeanAccessor accessor,
-                                          IdentityHashMap<Object, JavaBeanDescriptor> cache) {
+    private static void serializeInternal(
+            JavaBeanDescriptor descriptor,
+            Object obj,
+            JavaBeanAccessor accessor,
+            IdentityHashMap<Object, JavaBeanDescriptor> cache) {
         if (obj == null || descriptor == null) {
             return;
         }
@@ -160,7 +163,7 @@ public final class JavaBeanSerializeUtil {
                 Object keyDescriptor = key == null ? null : createDescriptorIfAbsent(key, accessor, cache);
                 Object valueDescriptor = value == null ? null : createDescriptorIfAbsent(value, accessor, cache);
                 descriptor.setProperty(keyDescriptor, valueDescriptor);
-            });// ~ end of loop map
+            }); // ~ end of loop map
         } else {
             if (JavaBeanAccessor.isAccessByMethod(accessor)) {
                 Map<String, Method> methods = ReflectUtils.getBeanPropertyReadMethods(obj.getClass());
@@ -195,15 +198,11 @@ public final class JavaBeanSerializeUtil {
                     }
                 } // ~ end of loop field map
             } // ~ end of if (JavaBeanAccessor.isAccessByField(accessor))
-
         } // ~ end of else
-
     } // ~ end of method serializeInternal
 
     public static Object deserialize(JavaBeanDescriptor beanDescriptor) {
-        return deserialize(
-                beanDescriptor,
-                Thread.currentThread().getContextClassLoader());
+        return deserialize(beanDescriptor, Thread.currentThread().getContextClassLoader());
     }
 
     public static Object deserialize(JavaBeanDescriptor beanDescriptor, ClassLoader loader) {
@@ -216,8 +215,11 @@ public final class JavaBeanSerializeUtil {
         return result;
     }
 
-    private static void deserializeInternal(Object result, JavaBeanDescriptor beanDescriptor, ClassLoader loader,
-                                            IdentityHashMap<JavaBeanDescriptor, Object> cache) {
+    private static void deserializeInternal(
+            Object result,
+            JavaBeanDescriptor beanDescriptor,
+            ClassLoader loader,
+            IdentityHashMap<JavaBeanDescriptor, Object> cache) {
         if (beanDescriptor.isEnumType() || beanDescriptor.isClassType() || beanDescriptor.isPrimitiveType()) {
             return;
         }
@@ -298,9 +300,8 @@ public final class JavaBeanSerializeUtil {
                 }
             }
         } else {
-            throw new IllegalArgumentException("Unsupported type " +
-                    beanDescriptor.getClassName() +
-                    ":" + beanDescriptor.getType());
+            throw new IllegalArgumentException(
+                    "Unsupported type " + beanDescriptor.getClassName() + ":" + beanDescriptor.getType());
         }
     }
 
@@ -311,8 +312,7 @@ public final class JavaBeanSerializeUtil {
             method = cls.getMethod(name, valueCls);
         } catch (NoSuchMethodException e) {
             for (Method m : cls.getMethods()) {
-                if (ReflectUtils.isBeanPropertyWriteMethod(m)
-                        && m.getName().equals(name)) {
+                if (ReflectUtils.isBeanPropertyWriteMethod(m) && m.getName().equals(name)) {
                     method = m;
                 }
             }
@@ -348,7 +348,7 @@ public final class JavaBeanSerializeUtil {
             }
         }
 
-        return cl.newInstance();
+        return cl.getDeclaredConstructor().newInstance();
     }
 
     public static Object getConstructorArg(Class<?> cl) {
@@ -386,8 +386,8 @@ public final class JavaBeanSerializeUtil {
         return null;
     }
 
-    private static Object instantiateForDeserialize(JavaBeanDescriptor beanDescriptor, ClassLoader loader,
-                                                    IdentityHashMap<JavaBeanDescriptor, Object> cache) {
+    private static Object instantiateForDeserialize(
+            JavaBeanDescriptor beanDescriptor, ClassLoader loader, IdentityHashMap<JavaBeanDescriptor, Object> cache) {
         if (cache.containsKey(beanDescriptor)) {
             return cache.get(beanDescriptor);
         }
@@ -464,7 +464,7 @@ public final class JavaBeanSerializeUtil {
         if (isReferenceType(name)) {
             name = name.substring(1, name.length() - 1);
         }
-        return Class.forName(name, false, loader);
+        return DefaultSerializeClassChecker.getInstance().loadClass(loader, name);
     }
 
     private static boolean isArray(String type) {
@@ -472,13 +472,10 @@ public final class JavaBeanSerializeUtil {
     }
 
     private static boolean isReferenceType(String type) {
-        return type != null
-                && type.startsWith(REFERENCE_TYPE_PREFIX)
-                && type.endsWith(REFERENCE_TYPE_SUFFIX);
+        return type != null && type.startsWith(REFERENCE_TYPE_PREFIX) && type.endsWith(REFERENCE_TYPE_SUFFIX);
     }
 
     private static Method getEnumValueOfMethod(Class cl) throws NoSuchMethodException {
         return cl.getMethod("valueOf", Class.class, String.class);
     }
-
 }

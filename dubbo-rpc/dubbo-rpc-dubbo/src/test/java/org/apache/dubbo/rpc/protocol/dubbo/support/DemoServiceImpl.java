@@ -18,6 +18,7 @@ package org.apache.dubbo.rpc.protocol.dubbo.support;
 
 import org.apache.dubbo.rpc.RpcContext;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,25 +51,23 @@ public class DemoServiceImpl implements DemoService {
     }
 
     public int getSize(String[] strs) {
-        if (strs == null)
-            return -1;
+        if (strs == null) return -1;
         return strs.length;
     }
 
     public int getSize(Object[] os) {
-        if (os == null)
-            return -1;
+        if (os == null) return -1;
         return os.length;
     }
 
     public Object invoke(String service, String method) throws Exception {
-        System.out.println("RpcContext.getContext().getRemoteHost()=" + RpcContext.getContext().getRemoteHost());
+        System.out.println("RpcContext.getServerAttachment().getRemoteHost()="
+                + RpcContext.getServiceContext().getRemoteHost());
         return service + ":" + method;
     }
 
     public Type enumlength(Type... types) {
-        if (types.length == 0)
-            return Type.Lower;
+        if (types.length == 0) return Type.Lower;
         return types[0];
     }
 
@@ -84,7 +83,7 @@ public class DemoServiceImpl implements DemoService {
         return arg1.toString();
     }
 
-    public byte getbyte(byte arg) {
+    public int getInt(int arg) {
         return arg;
     }
 
@@ -96,8 +95,7 @@ public class DemoServiceImpl implements DemoService {
         return map == null ? null : map.keySet();
     }
 
-    public void nonSerializedParameter(NonSerialized ns) {
-    }
+    public void nonSerializedParameter(NonSerialized ns) {}
 
     public NonSerialized returnNonSerialized() {
         return new NonSerialized();
@@ -124,6 +122,13 @@ public class DemoServiceImpl implements DemoService {
 
     @Override
     public String getRemoteApplicationName() {
-        return RpcContext.getContext().getRemoteApplicationName();
+        return RpcContext.getServiceContext().getRemoteApplicationName();
+    }
+
+    @Override
+    public byte[] download(int size) {
+        byte[] bytes = new byte[size];
+        Arrays.fill(bytes, (byte) 0);
+        return bytes;
     }
 }

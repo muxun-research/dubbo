@@ -16,12 +16,15 @@
  */
 package org.apache.dubbo.common.compiler.support;
 
-
-import javassist.CtClass;
+import org.apache.dubbo.common.bytecode.DubboLoaderClassPath;
 
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javassist.CannotCompileException;
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.LoaderClassPath;
 
 /**
  * JavassistCompiler. (SPI, Singleton, ThreadSafe)
@@ -39,7 +42,7 @@ public class JavassistCompiler extends AbstractCompiler {
     private static final Pattern FIELD_PATTERN = Pattern.compile("[^\n]+=[^\n]+;");
 
     @Override
-    public Class<?> doCompile(String name, String source) throws Throwable {
+    public Class<?> doCompile(Class<?> neighbor, ClassLoader classLoader, String name, String source) throws Throwable {
         CtClassBuilder builder = new CtClassBuilder();
         builder.setClassName(name);
 
@@ -77,9 +80,22 @@ public class JavassistCompiler extends AbstractCompiler {
         });
 
         // compile
-        ClassLoader classLoader = org.apache.dubbo.common.utils.ClassUtils.getCallerClassLoader(getClass());
         CtClass cls = builder.build(classLoader);
-        return cls.toClass(classLoader, JavassistCompiler.class.getProtectionDomain());
-    }
 
+        ClassPool cp = cls.getClassPool();
+        if (classLoader == null) {
+            classLoader = cp.getClassLoader();
+        }
+        cp.insertClassPath(new LoaderClassPath(classLoader));
+        cp.insertClassPath(new DubboLoaderClassPath());
+
+        try {
+            return cp.toClass(cls, neighbor, classLoader, JavassistCompiler.class.getProtectionDomain());
+        } catch (Throwable t) {
+            if (!(t instanceof CannotCompileException)) {
+                return cp.toClass(cls, classLoader, JavassistCompiler.class.getProtectionDomain());
+            }
+            throw t;
+        }
+    }
 }

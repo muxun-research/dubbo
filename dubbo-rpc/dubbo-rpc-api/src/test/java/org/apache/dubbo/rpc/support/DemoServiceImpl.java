@@ -26,7 +26,6 @@ import java.util.concurrent.CompletableFuture;
 /**
  * DemoServiceImpl
  */
-
 public class DemoServiceImpl implements DemoService {
     public DemoServiceImpl() {
         super();
@@ -49,25 +48,23 @@ public class DemoServiceImpl implements DemoService {
     }
 
     public int getSize(String[] strs) {
-        if (strs == null)
-            return -1;
+        if (strs == null) return -1;
         return strs.length;
     }
 
     public int getSize(Object[] os) {
-        if (os == null)
-            return -1;
+        if (os == null) return -1;
         return os.length;
     }
 
     public Object invoke(String service, String method) throws Exception {
-        System.out.println("RpcContext.getContext().getRemoteHost()=" + RpcContext.getContext().getRemoteHost());
+        System.out.println("RpcContext.getServerAttachment().getRemoteHost()="
+                + RpcContext.getServiceContext().getRemoteHost());
         return service + ":" + method;
     }
 
     public Type enumlength(Type... types) {
-        if (types.length == 0)
-            return Type.Lower;
+        if (types.length == 0) return Type.Lower;
         return types[0];
     }
 
@@ -120,4 +117,7 @@ public class DemoServiceImpl implements DemoService {
     public CompletableFuture<Map<String, String>> testReturnType5(String str) {
         return null;
     }
+
+    @Override
+    public void $invoke(String s1, String s2) {}
 }

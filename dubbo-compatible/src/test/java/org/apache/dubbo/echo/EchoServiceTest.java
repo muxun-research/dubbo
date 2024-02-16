@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.echo;
 
 import org.apache.dubbo.common.URL;
@@ -23,20 +22,20 @@ import org.apache.dubbo.rpc.Exporter;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Protocol;
 import org.apache.dubbo.rpc.ProxyFactory;
+import org.apache.dubbo.rpc.service.EchoService;
 import org.apache.dubbo.service.DemoService;
 import org.apache.dubbo.service.DemoServiceImpl;
-
-import com.alibaba.dubbo.rpc.service.EchoService;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class EchoServiceTest {
+class EchoServiceTest {
 
     @Test
-    public void testEcho() {
+    void testEcho() {
         DemoService server = new DemoServiceImpl();
-        ProxyFactory proxyFactory = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
+        ProxyFactory proxyFactory =
+                ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
         Protocol protocol = ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
         URL url = URL.valueOf("dubbo://127.0.0.1:5342/" + DemoService.class.getName() + "?version=1.0.0");
         Exporter<DemoService> exporter = protocol.export(proxyFactory.getInvoker(server, DemoService.class, url));
@@ -45,7 +44,8 @@ public class EchoServiceTest {
         Object result = client.$echo("haha");
         Assertions.assertEquals("haha", result);
 
-        org.apache.dubbo.rpc.service.EchoService newClient = (org.apache.dubbo.rpc.service.EchoService) proxyFactory.getProxy(invoker);
+        org.apache.dubbo.rpc.service.EchoService newClient =
+                (org.apache.dubbo.rpc.service.EchoService) proxyFactory.getProxy(invoker);
         Object res = newClient.$echo("hehe");
         Assertions.assertEquals("hehe", res);
         invoker.destroy();

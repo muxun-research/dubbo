@@ -17,15 +17,21 @@
 package org.apache.dubbo.rpc.protocol.dubbo;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.config.ConfigurationUtils;
+import org.apache.dubbo.common.constants.CommonConstants;
+import org.apache.dubbo.common.serialize.SerializationException;
 import org.apache.dubbo.common.utils.AtomicPositiveInteger;
 import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.TimeoutException;
 import org.apache.dubbo.remoting.exchange.ExchangeClient;
+import org.apache.dubbo.remoting.exchange.Request;
+import org.apache.dubbo.rpc.AppResponse;
 import org.apache.dubbo.rpc.AsyncRpcResult;
 import org.apache.dubbo.rpc.FutureContext;
 import org.apache.dubbo.rpc.Invocation;
+import org.apache.dubbo.rpc.InvokeMode;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
@@ -33,14 +39,18 @@ import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.protocol.AbstractInvoker;
 import org.apache.dubbo.rpc.support.RpcUtils;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_TIMEOUT;
 import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.PAYLOAD;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
 import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
@@ -50,26 +60,28 @@ import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
  */
 public class DubboInvoker<T> extends AbstractInvoker<T> {
 
-    private final ExchangeClient[] clients;
+    private final ClientsProvider clientsProvider;
 
     private final AtomicPositiveInteger index = new AtomicPositiveInteger();
-
-    private final String version;
 
     private final ReentrantLock destroyLock = new ReentrantLock();
 
     private final Set<Invoker<?>> invokers;
 
-    public DubboInvoker(Class<T> serviceType, URL url, ExchangeClient[] clients) {
-        this(serviceType, url, clients, null);
+    private final int serverShutdownTimeout;
+
+    private static final boolean setFutureWhenSync =
+            Boolean.parseBoolean(System.getProperty(CommonConstants.SET_FUTURE_IN_SYNC_MODE, "true"));
+
+    public DubboInvoker(Class<T> serviceType, URL url, ClientsProvider clientsProvider) {
+        this(serviceType, url, clientsProvider, null);
     }
 
-    public DubboInvoker(Class<T> serviceType, URL url, ExchangeClient[] clients, Set<Invoker<?>> invokers) {
-        super(serviceType, url, new String[]{INTERFACE_KEY, GROUP_KEY, TOKEN_KEY, TIMEOUT_KEY});
-        this.clients = clients;
-        // get version.
-        this.version = url.getParameter(VERSION_KEY, "0.0.0");
+    public DubboInvoker(Class<T> serviceType, URL url, ClientsProvider clientsProvider, Set<Invoker<?>> invokers) {
+        super(serviceType, url, new String[] {INTERFACE_KEY, GROUP_KEY, TOKEN_KEY});
+        this.clientsProvider = clientsProvider;
         this.invokers = invokers;
+        this.serverShutdownTimeout = ConfigurationUtils.getServerShutdownTimeout(getUrl().getScopeModel());
     }
 
     @Override
@@ -86,36 +98,71 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
 		// 如果仅有一个，就使用这个exchangeClient
 		// 如果有多个，采用伪round-robin的形式获取
         ExchangeClient currentClient;
-        if (clients.length == 1) {
-            currentClient = clients[0];
+        List<? extends ExchangeClient> exchangeClients = clientsProvider.getClients();
+        if (exchangeClients.size() == 1) {
+            currentClient = exchangeClients.get(0);
         } else {
-            currentClient = clients[index.getAndIncrement() % clients.length];
+            currentClient = exchangeClients.get(index.getAndIncrement() % exchangeClients.size());
         }
         try {
 			// 判断是否是单向调用
             boolean isOneway = RpcUtils.isOneway(getUrl(), invocation);
-			// 获得请求的默认超时时间
-            int timeout = getUrl().getMethodPositiveParameter(methodName, TIMEOUT_KEY, DEFAULT_TIMEOUT);
+            // 获得请求的默认超时时间
+            int timeout = RpcUtils.calculateTimeout(getUrl(), invocation, methodName, DEFAULT_TIMEOUT);
+            if (timeout <= 0) {
+                return AsyncRpcResult.newDefaultAsyncResult(
+                        new RpcException(
+                                RpcException.TIMEOUT_TERMINATE,
+                                "No time left for making the following call: " + invocation.getServiceName() + "."
+                                        + RpcUtils.getMethodName(invocation) + ", terminate directly."),
+                        invocation);
+            }
+
+            invocation.setAttachment(TIMEOUT_KEY, String.valueOf(timeout));
+
+            Integer payload = getUrl().getParameter(PAYLOAD, Integer.class);
+
+            Request request = new Request();
+            if (payload != null) {
+                request.setPayload(payload);
+            }
+            request.setData(inv);
+            request.setVersion(Version.getProtocolVersion());
+
             if (isOneway) {
                 boolean isSent = getUrl().getMethodParameter(methodName, Constants.SENT_KEY, false);
-                currentClient.send(inv, isSent);
+                request.setTwoWay(false);
+                currentClient.send(request, isSent);
                 return AsyncRpcResult.newDefaultAsyncResult(invocation);
             } else {
-				// 创建一个请求结果
-                AsyncRpcResult asyncRpcResult = new AsyncRpcResult(inv);
-				// 请求，并获取对应的Future对象
-                CompletableFuture<Object> responseFuture = currentClient.request(inv, timeout);
-				// 订阅请求完成事件
-                asyncRpcResult.subscribeTo(responseFuture);
-                // save for 2.6.x compatibility, for example, TraceFilter in Zipkin uses com.alibaba.xxx.FutureAdapter
-				// 适配2.6.x版本，比如Zipkin中的TraceFilter需要使用FutureAdapter
-                FutureContext.getContext().setCompatibleFuture(responseFuture);
-                return asyncRpcResult;
+                request.setTwoWay(true);
+                ExecutorService executor = getCallbackExecutor(getUrl(), inv);
+                // 订阅请求完成事件
+                CompletableFuture<AppResponse> appResponseFuture =
+                        currentClient.request(request, timeout, executor).thenApply(AppResponse.class::cast);
+                // 适配2.6.x版本，比如Zipkin中的TraceFilter需要使用FutureAdapter
+                if (setFutureWhenSync || ((RpcInvocation) invocation).getInvokeMode() != InvokeMode.SYNC) {
+                    FutureContext.getContext().setCompatibleFuture(appResponseFuture);
+                }
+                // 创建一个请求结果
+                AsyncRpcResult result = new AsyncRpcResult(appResponseFuture, inv);
+                result.setExecutor(executor);
+                return result;
             }
         } catch (TimeoutException e) {
-            throw new RpcException(RpcException.TIMEOUT_EXCEPTION, "Invoke remote method timeout. method: " + invocation.getMethodName() + ", provider: " + getUrl() + ", cause: " + e.getMessage(), e);
+            throw new RpcException(
+                    RpcException.TIMEOUT_EXCEPTION,
+                    "Invoke remote method timeout. method: " + RpcUtils.getMethodName(invocation) + ", provider: "
+                            + getUrl() + ", cause: " + e.getMessage(),
+                    e);
         } catch (RemotingException e) {
-            throw new RpcException(RpcException.NETWORK_EXCEPTION, "Failed to invoke remote method: " + invocation.getMethodName() + ", provider: " + getUrl() + ", cause: " + e.getMessage(), e);
+            String remoteExpMsg = "Failed to invoke remote method: " + RpcUtils.getMethodName(invocation)
+                    + ", provider: " + getUrl() + ", cause: " + e.getMessage();
+            if (e.getCause() instanceof IOException && e.getCause().getCause() instanceof SerializationException) {
+                throw new RpcException(RpcException.SERIALIZATION_EXCEPTION, remoteExpMsg, e);
+            } else {
+                throw new RpcException(RpcException.NETWORK_EXCEPTION, remoteExpMsg, e);
+            }
         }
     }
 
@@ -124,9 +171,9 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
         if (!super.isAvailable()) {
             return false;
         }
-        for (ExchangeClient client : clients) {
+        for (ExchangeClient client : clientsProvider.getClients()) {
             if (client.isConnected() && !client.hasAttribute(Constants.CHANNEL_ATTRIBUTE_READONLY_KEY)) {
-                //cannot write == not Available ?
+                // cannot write == not Available ?
                 return true;
             }
         }
@@ -138,9 +185,7 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
         // in order to avoid closing a client multiple times, a counter is used in case of connection per jvm, every
         // time when client.close() is called, counter counts down once, and when counter reaches zero, client will be
         // closed.
-        if (super.isDestroyed()) {
-            return;
-        } else {
+        if (!super.isDestroyed()) {
             // double check to avoid dup close
             destroyLock.lock();
             try {
@@ -151,14 +196,7 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
                 if (invokers != null) {
                     invokers.remove(this);
                 }
-                for (ExchangeClient client : clients) {
-                    try {
-                        client.close(ConfigurationUtils.getServerShutdownTimeout());
-                    } catch (Throwable t) {
-                        logger.warn(t.getMessage(), t);
-                    }
-                }
-
+                clientsProvider.close(ConfigurationUtils.reCalShutdownTime(serverShutdownTimeout));
             } finally {
                 destroyLock.unlock();
             }

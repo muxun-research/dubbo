@@ -14,18 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.config;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.alibaba.dubbo.config.ApplicationConfig;
 import com.alibaba.dubbo.config.MonitorConfig;
 import com.alibaba.dubbo.config.RegistryConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.DUMP_DIRECTORY;
@@ -39,9 +38,9 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
 
-public class ApplicationConfigTest {
+class ApplicationConfigTest {
     @Test
-    public void testName() throws Exception {
+    void testName() {
         ApplicationConfig application = new ApplicationConfig();
         application.setName("app");
         assertThat(application.getName(), equalTo("app"));
@@ -53,7 +52,7 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testVersion() throws Exception {
+    void testVersion() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setVersion("1.0.0");
         assertThat(application.getVersion(), equalTo("1.0.0"));
@@ -63,28 +62,28 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testOwner() throws Exception {
+    void testOwner() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setOwner("owner");
         assertThat(application.getOwner(), equalTo("owner"));
     }
 
     @Test
-    public void testOrganization() throws Exception {
+    void testOrganization() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setOrganization("org");
         assertThat(application.getOrganization(), equalTo("org"));
     }
 
     @Test
-    public void testArchitecture() throws Exception {
+    void testArchitecture() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setArchitecture("arch");
         assertThat(application.getArchitecture(), equalTo("arch"));
     }
 
     @Test
-    public void testEnvironment1() throws Exception {
+    void testEnvironment1() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setEnvironment("develop");
         assertThat(application.getEnvironment(), equalTo("develop"));
@@ -95,7 +94,7 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testEnvironment2() throws Exception {
+    void testEnvironment2() {
         Assertions.assertThrows(IllegalStateException.class, () -> {
             ApplicationConfig application = new ApplicationConfig("app");
             application.setEnvironment("illegal-env");
@@ -103,7 +102,7 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testRegistry() throws Exception {
+    void testRegistry() {
         ApplicationConfig application = new ApplicationConfig("app");
         RegistryConfig registry = new RegistryConfig();
         application.setRegistry(registry);
@@ -114,7 +113,7 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testMonitor() throws Exception {
+    void testMonitor() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setMonitor(new MonitorConfig("monitor-addr"));
         assertThat(application.getMonitor().getAddress(), equalTo("monitor-addr"));
@@ -123,21 +122,21 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testLogger() throws Exception {
+    void testLogger() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setLogger("log4j");
         assertThat(application.getLogger(), equalTo("log4j"));
     }
 
     @Test
-    public void testDefault() throws Exception {
+    void testDefault() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setDefault(true);
         assertThat(application.isDefault(), is(true));
     }
 
     @Test
-    public void testDumpDirectory() throws Exception {
+    void testDumpDirectory() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setDumpDirectory("/dump");
         assertThat(application.getDumpDirectory(), equalTo("/dump"));
@@ -147,7 +146,7 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testQosEnable() throws Exception {
+    void testQosEnable() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setQosEnable(true);
         assertThat(application.getQosEnable(), is(true));
@@ -157,14 +156,14 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testQosPort() throws Exception {
+    void testQosPort() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setQosPort(8080);
         assertThat(application.getQosPort(), equalTo(8080));
     }
 
     @Test
-    public void testQosAcceptForeignIp() throws Exception {
+    void testQosAcceptForeignIp() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setQosAcceptForeignIp(true);
         assertThat(application.getQosAcceptForeignIp(), is(true));
@@ -174,7 +173,7 @@ public class ApplicationConfigTest {
     }
 
     @Test
-    public void testParameters() throws Exception {
+    void testParameters() {
         ApplicationConfig application = new ApplicationConfig("app");
         application.setQosAcceptForeignIp(true);
         Map<String, String> parameters = new HashMap<String, String>();

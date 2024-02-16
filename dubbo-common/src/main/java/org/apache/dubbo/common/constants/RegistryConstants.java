@@ -14,12 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.constants;
 
 public interface RegistryConstants {
 
     String REGISTRY_KEY = "registry";
+
+    String REGISTRY_CLUSTER_KEY = "REGISTRY_CLUSTER";
+
+    String REGISTRY_CLUSTER_TYPE_KEY = "registry-cluster-type";
 
     String REGISTRY_PROTOCOL = "registry";
 
@@ -39,6 +42,8 @@ public interface RegistryConstants {
 
     String CONFIGURATORS_CATEGORY = "configurators";
 
+    String ALL_CATEGORIES = "providers,configurators,routers";
+
     String DYNAMIC_CONFIGURATORS_CATEGORY = "dynamicconfigurators";
 
     String APP_DYNAMIC_CONFIGURATORS_CATEGORY = "appdynamicconfigurators";
@@ -49,7 +54,91 @@ public interface RegistryConstants {
 
     String ROUTE_PROTOCOL = "route";
 
+    String ROUTE_SCRIPT_PROTOCOL = "script";
+
     String OVERRIDE_PROTOCOL = "override";
 
     String COMPATIBLE_CONFIG_KEY = "compatible_config";
+
+    String REGISTER_MODE_KEY = "register-mode";
+
+    String DUBBO_REGISTER_MODE_DEFAULT_KEY = "dubbo.application.register-mode";
+
+    String DUBBO_PUBLISH_INTERFACE_DEFAULT_KEY = "dubbo.application.publish-interface";
+
+    String DUBBO_PUBLISH_INSTANCE_DEFAULT_KEY = "dubbo.application.publish-instance";
+
+    String DEFAULT_REGISTER_MODE_INTERFACE = "interface";
+
+    String DEFAULT_REGISTER_MODE_INSTANCE = "instance";
+
+    String DEFAULT_REGISTER_MODE_ALL = "all";
+    /**
+     * The parameter key of Dubbo Registry type
+     *
+     * @since 2.7.5
+     */
+    String REGISTRY_TYPE_KEY = "registry-type";
+
+    /**
+     * The parameter value of Service-Oriented Registry type
+     *
+     * @since 2.7.5
+     */
+    String SERVICE_REGISTRY_TYPE = "service";
+
+    /**
+     * The protocol for Service Discovery
+     *
+     * @since 2.7.5
+     */
+    String SERVICE_REGISTRY_PROTOCOL = "service-discovery-registry";
+
+    /**
+     * Specify registry level services consumer needs to subscribe to, multiple values should be separated using ",".
+     */
+    String SUBSCRIBED_SERVICE_NAMES_KEY = "subscribed-services";
+
+    String PROVIDED_BY = "provided-by";
+
+    /**
+     * The provider tri port
+     *
+     * @since 3.1.0
+     */
+    String PROVIDER_PORT = "provider-port";
+
+    /**
+     * provider namespace
+     *
+     * @since 3.1.1
+     */
+    String PROVIDER_NAMESPACE = "provider-namespace";
+
+    /**
+     * The request size of service instances
+     *
+     * @since 2.7.5
+     */
+    String INSTANCES_REQUEST_SIZE_KEY = "instances-request-size";
+
+    /**
+     * The default request size of service instances
+     */
+    int DEFAULT_INSTANCES_REQUEST_SIZE = 100;
+
+    String ACCEPTS_KEY = "accepts";
+
+    String REGISTRY_ZONE = "registry_zone";
+    String REGISTRY_ZONE_FORCE = "registry_zone_force";
+    String ZONE_KEY = "zone";
+
+    String REGISTRY_SERVICE_REFERENCE_PATH = "org.apache.dubbo.registry.RegistryService";
+    String INIT = "INIT";
+
+    float DEFAULT_HASHMAP_LOAD_FACTOR = 0.75f;
+
+    String ENABLE_EMPTY_PROTECTION_KEY = "enable-empty-protection";
+    boolean DEFAULT_ENABLE_EMPTY_PROTECTION = false;
+    String REGISTER_CONSUMER_URL_KEY = "register-consumer-url";
 }

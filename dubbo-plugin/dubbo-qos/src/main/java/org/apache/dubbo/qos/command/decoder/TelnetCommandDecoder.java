@@ -17,20 +17,23 @@
 package org.apache.dubbo.qos.command.decoder;
 
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.qos.command.CommandContext;
+import org.apache.dubbo.qos.api.CommandContext;
 import org.apache.dubbo.qos.command.CommandContextFactory;
-
 
 public class TelnetCommandDecoder {
     public static final CommandContext decode(String str) {
         CommandContext commandContext = null;
         if (!StringUtils.isBlank(str)) {
+            str = str.trim();
             String[] array = str.split("(?<![\\\\]) ");
             if (array.length > 0) {
-                String name = array[0];
                 String[] targetArgs = new String[array.length - 1];
                 System.arraycopy(array, 1, targetArgs, 0, array.length - 1);
-                commandContext = CommandContextFactory.newInstance( name, targetArgs,false);
+                String name = array[0].trim();
+                if (name.equals("invoke") && array.length > 2) {
+                    targetArgs = reBuildInvokeCmdArgs(str);
+                }
+                commandContext = CommandContextFactory.newInstance(name, targetArgs, false);
                 commandContext.setOriginRequest(str);
             }
         }
@@ -38,4 +41,7 @@ public class TelnetCommandDecoder {
         return commandContext;
     }
 
+    private static String[] reBuildInvokeCmdArgs(String cmd) {
+        return new String[] {cmd.substring(cmd.indexOf(" ") + 1).trim()};
+    }
 }

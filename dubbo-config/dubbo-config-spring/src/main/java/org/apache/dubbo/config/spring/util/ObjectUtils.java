@@ -18,10 +18,14 @@ package org.apache.dubbo.config.spring.util;
 
 /**
  * Object Utilities
- *
- * @since 2.6.6
  */
+@SuppressWarnings("unchecked")
 public abstract class ObjectUtils {
+
+    /**
+     * Empty String array
+     */
+    public static final String[] EMPTY_STRING_ARRAY = {};
 
     /**
      * Convert from variable arguments to array
@@ -33,5 +37,4 @@ public abstract class ObjectUtils {
     public static <T> T[] of(T... values) {
         return values;
     }
-
 }

@@ -16,23 +16,28 @@
  */
 package org.apache.dubbo.qos.command.impl;
 
-import org.apache.dubbo.qos.command.BaseCommand;
-import org.apache.dubbo.qos.command.CommandContext;
-import org.apache.dubbo.qos.command.annotation.Cmd;
+import org.apache.dubbo.qos.api.BaseCommand;
+import org.apache.dubbo.qos.api.Cmd;
+import org.apache.dubbo.qos.api.CommandContext;
+import org.apache.dubbo.qos.command.util.ServiceCheckUtils;
 import org.apache.dubbo.qos.textui.TTable;
-import org.apache.dubbo.rpc.model.ApplicationModel;
 import org.apache.dubbo.rpc.model.ConsumerModel;
+import org.apache.dubbo.rpc.model.FrameworkModel;
 import org.apache.dubbo.rpc.model.ProviderModel;
 
 import java.util.Collection;
 
-import static org.apache.dubbo.registry.support.ProviderConsumerRegTable.getConsumerAddressNum;
-import static org.apache.dubbo.registry.support.ProviderConsumerRegTable.isRegistered;
-
-@Cmd(name = "ls", summary = "ls service", example = {
-        "ls"
-})
+@Cmd(
+        name = "ls",
+        summary = "ls service",
+        example = {"ls"})
 public class Ls implements BaseCommand {
+    private final FrameworkModel frameworkModel;
+
+    public Ls(FrameworkModel frameworkModel) {
+        this.frameworkModel = frameworkModel;
+    }
+
     @Override
     public String execute(CommandContext commandContext, String[] args) {
         StringBuilder result = new StringBuilder();
@@ -45,19 +50,25 @@ public class Ls implements BaseCommand {
     public String listProvider() {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("As Provider side:" + System.lineSeparator());
-        Collection<ProviderModel> providerModelList = ApplicationModel.allProviderModels();
+        Collection<ProviderModel> providerModelList =
+                frameworkModel.getServiceRepository().allProviderModels();
 
-        TTable tTable = new TTable(new TTable.ColumnDefine[]{
-                new TTable.ColumnDefine(TTable.Align.MIDDLE),
-                new TTable.ColumnDefine(TTable.Align.MIDDLE)
+        TTable tTable = new TTable(new TTable.ColumnDefine[] {
+            new TTable.ColumnDefine(TTable.Align.MIDDLE), new TTable.ColumnDefine(TTable.Align.MIDDLE)
         });
 
-        //Header
+        // Header
         tTable.addRow("Provider Service Name", "PUB");
 
-        //Content
+        // Content
         for (ProviderModel providerModel : providerModelList) {
-            tTable.addRow(providerModel.getServiceName(), isRegistered(providerModel.getServiceName()) ? "Y" : "N");
+            if (providerModel.getModuleModel().isInternal()) {
+                tTable.addRow(
+                        "DubboInternal - " + providerModel.getServiceKey(),
+                        ServiceCheckUtils.getRegisterStatus(providerModel));
+            } else {
+                tTable.addRow(providerModel.getServiceKey(), ServiceCheckUtils.getRegisterStatus(providerModel));
+            }
         }
         stringBuilder.append(tTable.rendering());
 
@@ -67,20 +78,20 @@ public class Ls implements BaseCommand {
     public String listConsumer() {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("As Consumer side:" + System.lineSeparator());
-        Collection<ConsumerModel> consumerModelList = ApplicationModel.allConsumerModels();
+        Collection<ConsumerModel> consumerModelList =
+                frameworkModel.getServiceRepository().allConsumerModels();
 
-        TTable tTable = new TTable(new TTable.ColumnDefine[]{
-                new TTable.ColumnDefine(TTable.Align.MIDDLE),
-                new TTable.ColumnDefine(TTable.Align.MIDDLE)
+        TTable tTable = new TTable(new TTable.ColumnDefine[] {
+            new TTable.ColumnDefine(TTable.Align.MIDDLE), new TTable.ColumnDefine(TTable.Align.MIDDLE)
         });
 
-        //Header
+        // Header
         tTable.addRow("Consumer Service Name", "NUM");
 
-        //Content
-        //TODO to calculate consumerAddressNum
+        // Content
+        // TODO to calculate consumerAddressNum
         for (ConsumerModel consumerModel : consumerModelList) {
-            tTable.addRow(consumerModel.getServiceName(), getConsumerAddressNum(consumerModel.getServiceName()));
+            tTable.addRow(consumerModel.getServiceKey(), ServiceCheckUtils.getConsumerAddressNum(consumerModel));
         }
 
         stringBuilder.append(tTable.rendering());

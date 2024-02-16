@@ -14,10 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.alibaba.dubbo.rpc;
 
+import org.apache.dubbo.rpc.model.ServiceModel;
+
+import java.beans.Transient;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Deprecated
 public interface Invocation extends org.apache.dubbo.rpc.Invocation {
@@ -30,15 +36,95 @@ public interface Invocation extends org.apache.dubbo.rpc.Invocation {
     }
 
     @Override
-    default void setAttachmentIfAbsent(String key, String value) {
+    default void setAttachment(String key, String value) {
+        setObjectAttachment(key, value);
     }
 
     @Override
-    default void setAttachment(String key, String value) {
-
+    default void setAttachmentIfAbsent(String key, String value) {
+        setObjectAttachmentIfAbsent(key, value);
     }
 
-    class CompatibleInvocation implements Invocation, org.apache.dubbo.rpc.Invocation {
+    @Override
+    default void setObjectAttachmentIfAbsent(String key, Object value) {}
+
+    @Override
+    default void setObjectAttachment(String key, Object value) {}
+
+    @Override
+    default void setAttachment(String key, Object value) {
+        setObjectAttachment(key, value);
+    }
+
+    @Override
+    default void setAttachmentIfAbsent(String key, Object value) {
+        setObjectAttachmentIfAbsent(key, value);
+    }
+
+    @Override
+    default String getServiceName() {
+        return null;
+    }
+
+    @Override
+    default String getTargetServiceUniqueName() {
+        return null;
+    }
+
+    @Override
+    default String getAttachment(String key, String defaultValue) {
+        return null;
+    }
+
+    @Override
+    default void setServiceModel(ServiceModel serviceModel) {}
+
+    @Override
+    default ServiceModel getServiceModel() {
+        return null;
+    }
+
+    @Override
+    default Object put(Object key, Object value) {
+        return null;
+    }
+
+    @Override
+    default Object get(Object key) {
+        return null;
+    }
+
+    @Override
+    default Map<Object, Object> getAttributes() {
+        return null;
+    }
+
+    @Override
+    default Map<String, Object> getObjectAttachments() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    default Map<String, Object> copyObjectAttachments() {
+        return new HashMap<>(getObjectAttachments());
+    }
+
+    @Override
+    default void foreachAttachment(Consumer<Map.Entry<String, Object>> consumer) {
+        getObjectAttachments().entrySet().forEach(consumer);
+    }
+
+    @Override
+    default Object getObjectAttachment(String key) {
+        return null;
+    }
+
+    @Override
+    default Object getObjectAttachment(String key, Object defaultValue) {
+        return null;
+    }
+
+    class CompatibleInvocation implements Invocation {
 
         private org.apache.dubbo.rpc.Invocation delegate;
 
@@ -47,8 +133,23 @@ public interface Invocation extends org.apache.dubbo.rpc.Invocation {
         }
 
         @Override
+        public String getTargetServiceUniqueName() {
+            return delegate.getTargetServiceUniqueName();
+        }
+
+        @Override
+        public String getProtocolServiceKey() {
+            return delegate.getProtocolServiceKey();
+        }
+
+        @Override
         public String getMethodName() {
             return delegate.getMethodName();
+        }
+
+        @Override
+        public String getServiceName() {
+            return null;
         }
 
         @Override
@@ -77,13 +178,49 @@ public interface Invocation extends org.apache.dubbo.rpc.Invocation {
         }
 
         @Override
+        @Transient
         public Invoker<?> getInvoker() {
             return new Invoker.CompatibleInvoker(delegate.getInvoker());
         }
 
         @Override
+        public void setServiceModel(ServiceModel serviceModel) {
+            delegate.setServiceModel(serviceModel);
+        }
+
+        @Override
+        public ServiceModel getServiceModel() {
+            return delegate.getServiceModel();
+        }
+
+        @Override
+        public Object put(Object key, Object value) {
+            return delegate.put(key, value);
+        }
+
+        @Override
+        public Object get(Object key) {
+            return delegate.get(key);
+        }
+
+        @Override
+        public Map<Object, Object> getAttributes() {
+            return delegate.getAttributes();
+        }
+
+        @Override
         public org.apache.dubbo.rpc.Invocation getOriginal() {
             return delegate;
+        }
+
+        @Override
+        public void addInvokedInvoker(org.apache.dubbo.rpc.Invoker<?> invoker) {
+            delegate.addInvokedInvoker(invoker);
+        }
+
+        @Override
+        public List<org.apache.dubbo.rpc.Invoker<?>> getInvokedInvokers() {
+            return delegate.getInvokedInvokers();
         }
     }
 }

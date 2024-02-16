@@ -18,19 +18,18 @@ package org.apache.dubbo.registry.support;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.URLBuilder;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.registry.Registry;
 import org.apache.dubbo.registry.RegistryFactory;
 import org.apache.dubbo.registry.RegistryService;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.ScopeModelAware;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
-
+import static org.apache.dubbo.common.constants.CommonConstants.CHECK_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.TIMESTAMP_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.REGISTRY_FAILED_CREATE_INSTANCE;
 import static org.apache.dubbo.rpc.cluster.Constants.EXPORT_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 
@@ -39,79 +38,93 @@ import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
  *
  * @see org.apache.dubbo.registry.RegistryFactory
  */
-public abstract class AbstractRegistryFactory implements RegistryFactory {
+public abstract class AbstractRegistryFactory implements RegistryFactory, ScopeModelAware {
 
-    // Log output
-    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractRegistryFactory.class);
+    private static final ErrorTypeAwareLogger LOGGER =
+            LoggerFactory.getErrorTypeAwareLogger(AbstractRegistryFactory.class);
 
-    // The lock for the acquisition process of the registry
-    private static final ReentrantLock LOCK = new ReentrantLock();
+    private RegistryManager registryManager;
+    protected ApplicationModel applicationModel;
 
-    // Registry Collection Map<RegistryAddress, Registry>
-    private static final Map<String, Registry> REGISTRIES = new HashMap<>();
-
-    /**
-     * Get all registries
-     *
-     * @return all registries
-     */
-    public static Collection<Registry> getRegistries() {
-        return Collections.unmodifiableCollection(REGISTRIES.values());
-    }
-
-    /**
-     * Close all created registries
-     */
-    // TODO: 2017/8/30 to move somewhere else better
-    public static void destroyAll() {
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Close all registries " + getRegistries());
-        }
-        // Lock up the registry shutdown process
-        LOCK.lock();
-        try {
-            for (Registry registry : getRegistries()) {
-                try {
-                    registry.destroy();
-                } catch (Throwable e) {
-                    LOGGER.error(e.getMessage(), e);
-                }
-            }
-            REGISTRIES.clear();
-        } finally {
-            // Release the lock
-            LOCK.unlock();
-        }
+    @Override
+    public void setApplicationModel(ApplicationModel applicationModel) {
+        this.applicationModel = applicationModel;
+        this.registryManager = applicationModel.getBeanFactory().getBean(RegistryManager.class);
     }
 
     @Override
     public Registry getRegistry(URL url) {
+        if (registryManager == null) {
+            throw new IllegalStateException("Unable to fetch RegistryManager from ApplicationModel BeanFactory. "
+                    + "Please check if `setApplicationModel` has been override.");
+        }
+
+        Registry defaultNopRegistry = registryManager.getDefaultNopRegistryIfDestroyed();
+        if (null != defaultNopRegistry) {
+            return defaultNopRegistry;
+        }
+
         url = URLBuilder.from(url)
                 .setPath(RegistryService.class.getName())
                 .addParameter(INTERFACE_KEY, RegistryService.class.getName())
-                .removeParameters(EXPORT_KEY, REFER_KEY)
+                .removeParameter(TIMESTAMP_KEY)
+                .removeAttribute(EXPORT_KEY)
+                .removeAttribute(REFER_KEY)
                 .build();
-        String key = url.toServiceStringWithoutResolving();
+
+        String key = createRegistryCacheKey(url);
+        Registry registry = null;
+        boolean check = url.getParameter(CHECK_KEY, true) && url.getPort() != 0;
+
         // Lock the registry access process to ensure a single instance of the registry
-        LOCK.lock();
+        registryManager.getRegistryLock().lock();
         try {
-            Registry registry = REGISTRIES.get(key);
+            // double check
+            // fix https://github.com/apache/dubbo/issues/7265.
+            defaultNopRegistry = registryManager.getDefaultNopRegistryIfDestroyed();
+            if (null != defaultNopRegistry) {
+                return defaultNopRegistry;
+            }
+
+            registry = registryManager.getRegistry(key);
             if (registry != null) {
                 return registry;
             }
-            //create registry by spi/ioc
+
+            // create registry by spi/ioc
             registry = createRegistry(url);
-            if (registry == null) {
+            if (check && registry == null) {
                 throw new IllegalStateException("Can not create registry " + url);
             }
-            REGISTRIES.put(key, registry);
-            return registry;
+
+            if (registry != null) {
+                registryManager.putRegistry(key, registry);
+            }
+        } catch (Exception e) {
+            if (check) {
+                throw new RuntimeException("Can not create registry " + url, e);
+            } else {
+                // 1-11 Failed to obtain or create registry (service) object.
+                LOGGER.warn(REGISTRY_FAILED_CREATE_INSTANCE, "", "", "Failed to obtain or create registry ", e);
+            }
         } finally {
             // Release the lock
-            LOCK.unlock();
+            registryManager.getRegistryLock().unlock();
         }
+
+        return registry;
+    }
+
+    /**
+     * Create the key for the registries cache.
+     * This method may be overridden by the sub-class.
+     *
+     * @param url the registration {@link URL url}
+     * @return non-null
+     */
+    protected String createRegistryCacheKey(URL url) {
+        return url.toServiceStringWithoutResolving();
     }
 
     protected abstract Registry createRegistry(URL url);
-
 }

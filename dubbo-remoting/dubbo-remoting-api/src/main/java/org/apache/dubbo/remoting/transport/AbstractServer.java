@@ -17,102 +17,103 @@
 package org.apache.dubbo.remoting.transport;
 
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.store.DataStore;
+import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
+import org.apache.dubbo.common.utils.ConcurrentHashSet;
 import org.apache.dubbo.common.utils.ExecutorUtil;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.remoting.RemotingException;
-import org.apache.dubbo.remoting.Server;
+import org.apache.dubbo.remoting.RemotingServer;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.THREADS_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.INTERNAL_ERROR;
+import static org.apache.dubbo.config.Constants.SERVER_THREAD_POOL_NAME;
 import static org.apache.dubbo.remoting.Constants.ACCEPTS_KEY;
 import static org.apache.dubbo.remoting.Constants.DEFAULT_ACCEPTS;
-import static org.apache.dubbo.remoting.Constants.DEFAULT_IDLE_TIMEOUT;
-import static org.apache.dubbo.remoting.Constants.IDLE_TIMEOUT_KEY;
 
 /**
  * 抽象远程服务端
  * AbstractServer
  */
-public abstract class AbstractServer extends AbstractEndpoint implements Server {
+public abstract class AbstractServer extends AbstractEndpoint implements RemotingServer {
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(AbstractServer.class);
+    /**
+     * 线程池
+     */
+    private Set<ExecutorService> executors = new ConcurrentHashSet<>();
+    /**
+     * 服务地址
+     */
+    private InetSocketAddress localAddress;
+    /**
+     * 绑定地址
+     */
+    private InetSocketAddress bindAddress;
+    /**
+     * 服务器最大可接受连接数
+     */
+    private int accepts;
 
-    protected static final String SERVER_THREAD_POOL_NAME = "DubboServerHandler";
-    private static final Logger logger = LoggerFactory.getLogger(AbstractServer.class);
-	/**
-	 * 线程池
-	 */
-	ExecutorService executor;
-	/**
-	 * 服务地址
-	 */
-	private InetSocketAddress localAddress;
-	/**
-	 * 绑定地址
-	 */
-	private InetSocketAddress bindAddress;
-	/**
-	 * 服务器最大可接受连接数
-	 */
-	private int accepts;
-	/**
-	 * 空闲超时时间
-	 */
-	private int idleTimeout;
+    private ExecutorRepository executorRepository;
 
     public AbstractServer(URL url, ChannelHandler handler) throws RemotingException {
         super(url, handler);
-		// 服务地址Socket
+        executorRepository = ExecutorRepository.getInstance(url.getOrDefaultApplicationModel());
+        // 服务地址Socket
         localAddress = getUrl().toInetSocketAddress();
-		// 获取绑定的HOST和PORT
+        // 获取绑定的HOST和PORT
         String bindIp = getUrl().getParameter(Constants.BIND_IP_KEY, getUrl().getHost());
         int bindPort = getUrl().getParameter(Constants.BIND_PORT_KEY, getUrl().getPort());
         if (url.getParameter(ANYHOST_KEY, false) || NetUtils.isInvalidLocalHost(bindIp)) {
             bindIp = ANYHOST_VALUE;
         }
         bindAddress = new InetSocketAddress(bindIp, bindPort);
-		// 服务端最大可接受连接数，默认为0
+        // 服务端最大可接受连接数，默认为0
         this.accepts = url.getParameter(ACCEPTS_KEY, DEFAULT_ACCEPTS);
-		// 服务端连接最大空闲等待时间，默认为600s
-        this.idleTimeout = url.getParameter(IDLE_TIMEOUT_KEY, DEFAULT_IDLE_TIMEOUT);
-		try {
-			// 创建连接
+        try {
+            // 创建连接
             doOpen();
             if (logger.isInfoEnabled()) {
-                logger.info("Start " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export " + getLocalAddress());
+                logger.info("Start " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export "
+                        + getLocalAddress());
             }
         } catch (Throwable t) {
-            throw new RemotingException(url.toInetSocketAddress(), null, "Failed to bind " + getClass().getSimpleName()
-                    + " on " + getLocalAddress() + ", cause: " + t.getMessage(), t);
+            throw new RemotingException(
+                    url.toInetSocketAddress(),
+                    null,
+                    "Failed to bind " + getClass().getSimpleName() + " on " + bindAddress + ", cause: "
+                            + t.getMessage(),
+                    t);
         }
-        //fixme replace this with better method
-		// 从DataStore中获取线程池
-        DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();
-		// dataStore的实现是一个Map<?, Map<?, ?>>类型
-		// 获取对应的类型及端口的线程池
-        executor = (ExecutorService) dataStore.get(Constants.EXECUTOR_SERVICE_COMPONENT_KEY, Integer.toString(url.getPort()));
+        // 从DataStore中获取线程池
+        // dataStore的实现是一个Map<?, Map<?, ?>>类型
+        // 获取对应的类型及端口的线程池
+        executors.add(
+                executorRepository.createExecutorIfAbsent(ExecutorUtil.setThreadName(url, SERVER_THREAD_POOL_NAME)));
     }
 
     protected abstract void doOpen() throws Throwable;
 
     protected abstract void doClose() throws Throwable;
 
+    protected abstract int getChannelsSize();
+
     @Override
     public void reset(URL url) {
         if (url == null) {
             return;
         }
+
 		try {
 			// 从URL中重新获取服务端最大可接受连接数
             if (url.hasParameter(ACCEPTS_KEY)) {
@@ -122,87 +123,60 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
                 }
             }
         } catch (Throwable t) {
-            logger.error(t.getMessage(), t);
+            logger.error(INTERNAL_ERROR, "unknown error in remoting module", "", t.getMessage(), t);
         }
-		try {
-			// 从URL中获取服务端连接的空间等待时间
-            if (url.hasParameter(IDLE_TIMEOUT_KEY)) {
-                int t = url.getParameter(IDLE_TIMEOUT_KEY, 0);
-                if (t > 0) {
-                    this.idleTimeout = t;
-                }
-            }
-        } catch (Throwable t) {
-            logger.error(t.getMessage(), t);
-        }
-		try {
-			// 从URL中重新获取线程的名称
-            if (url.hasParameter(THREADS_KEY)
-                    && executor instanceof ThreadPoolExecutor && !executor.isShutdown()) {
-				// 在线程池还没有停止的前提下，进行替换
-                ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;
-                int threads = url.getParameter(THREADS_KEY, 0);
-				// 获取原有线程池的核心信息
-				// 获取最大连接数和核心连接数
-                int max = threadPoolExecutor.getMaximumPoolSize();
-                int core = threadPoolExecutor.getCorePoolSize();
-                if (threads > 0 && (threads != max || threads != core)) {
-					// 重新设置线程池的核心信息
-                    if (threads < core) {
-                        threadPoolExecutor.setCorePoolSize(threads);
-                        if (core == max) {
-                            threadPoolExecutor.setMaximumPoolSize(threads);
-                        }
-                    } else {
-                        threadPoolExecutor.setMaximumPoolSize(threads);
-                        if (core == max) {
-                            threadPoolExecutor.setCorePoolSize(threads);
-                        }
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            logger.error(t.getMessage(), t);
-        }
-        super.setUrl(getUrl().addParameters(url.getParameters()));
-	}
 
-	/**
-	 * 服务端发送消息，需要遍历所有创建Channel
-	 */
-	@Override
-	public void send(Object message, boolean sent) throws RemotingException {
-		Collection<Channel> channels = getChannels();
-		for (Channel channel : channels) {
-			// 在Channel处于连接状态的情况下，发送消息
-			if (channel.isConnected()) {
-				channel.send(message, sent);
-			}
-		}
-	}
+        ExecutorService executor =
+                executorRepository.createExecutorIfAbsent(ExecutorUtil.setThreadName(url, SERVER_THREAD_POOL_NAME));
+        executors.add(executor);
+        executorRepository.updateThreadpool(url, executor);
+        super.setUrl(getUrl().addParameters(url.getParameters()));
+    }
+
+    /**
+     * 服务端发送消息，需要遍历所有创建Channel
+     */
+    @Override
+    public void send(Object message, boolean sent) throws RemotingException {
+        Collection<Channel> channels = getChannels();
+        for (Channel channel : channels) {
+            // 在Channel处于连接状态的情况下，发送消息
+            if (channel.isConnected()) {
+                channel.send(message, sent);
+            }
+        }
+    }
 
     @Override
     public void close() {
         if (logger.isInfoEnabled()) {
-            logger.info("Close " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export " + getLocalAddress());
-		}
-		// 关闭连接池
-        ExecutorUtil.shutdownNow(executor, 100);
+            logger.info("Close " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export "
+                    + getLocalAddress());
+        }
+
+        for (ExecutorService executor : executors) {
+            // 关闭连接池
+            ExecutorUtil.shutdownNow(executor, 100);
+        }
+
         try {
             super.close();
         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            logger.warn(INTERNAL_ERROR, "unknown error in remoting module", "", e.getMessage(), e);
         }
+
         try {
             doClose();
         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            logger.warn(INTERNAL_ERROR, "unknown error in remoting module", "", e.getMessage(), e);
         }
     }
 
     @Override
     public void close(int timeout) {
-        ExecutorUtil.gracefulShutdown(executor, timeout);
+        for (ExecutorService executor : executors) {
+            ExecutorUtil.gracefulShutdown(executor, timeout);
+        }
         close();
     }
 
@@ -219,22 +193,27 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         return accepts;
     }
 
-    public int getIdleTimeout() {
-        return idleTimeout;
-    }
-
     @Override
     public void connected(Channel ch) throws RemotingException {
         // If the server has entered the shutdown process, reject any new connection
         if (this.isClosing() || this.isClosed()) {
-            logger.warn("Close new channel " + ch + ", cause: server is closing or has been closed. For example, receive a new connect request while in shutdown process.");
+            logger.warn(
+                    INTERNAL_ERROR,
+                    "unknown error in remoting module",
+                    "",
+                    "Close new channel " + ch
+                            + ", cause: server is closing or has been closed. For example, receive a new connect request while in shutdown process.");
             ch.close();
             return;
         }
 
-        Collection<Channel> channels = getChannels();
-        if (accepts > 0 && channels.size() > accepts) {
-            logger.error("Close channel " + ch + ", cause: The server " + ch.getLocalAddress() + " connections greater than max config " + accepts);
+        if (accepts > 0 && getChannelsSize() > accepts) {
+            logger.error(
+                    INTERNAL_ERROR,
+                    "unknown error in remoting module",
+                    "",
+                    "Close channel " + ch + ", cause: The server " + ch.getLocalAddress()
+                            + " connections greater than max config " + accepts);
             ch.close();
             return;
         }
@@ -243,11 +222,13 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
 
     @Override
     public void disconnected(Channel ch) throws RemotingException {
-        Collection<Channel> channels = getChannels();
-        if (channels.isEmpty()) {
-            logger.warn("All clients has disconnected from " + ch.getLocalAddress() + ". You can graceful shutdown now.");
+        if (getChannelsSize() == 0) {
+            logger.warn(
+                    INTERNAL_ERROR,
+                    "unknown error in remoting module",
+                    "",
+                    "All clients has disconnected from " + ch.getLocalAddress() + ". You can graceful shutdown now.");
         }
         super.disconnected(ch);
     }
-
 }

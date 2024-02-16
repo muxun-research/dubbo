@@ -22,12 +22,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Menu {
+class Menu {
 
     private Map<String, List<String>> menus = new HashMap<String, List<String>>();
 
-    public Menu() {
-    }
+    public Menu() {}
 
     public Menu(Map<String, List<String>> menus) {
         for (Map.Entry<String, List<String>> entry : menus.entrySet()) {
@@ -62,5 +61,4 @@ public class Menu {
             addMenu(entry.getKey(), entry.getValue());
         }
     }
-
 }

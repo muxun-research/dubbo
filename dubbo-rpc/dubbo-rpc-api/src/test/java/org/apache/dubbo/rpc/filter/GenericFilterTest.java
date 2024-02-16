@@ -28,25 +28,26 @@ import org.apache.dubbo.rpc.service.GenericService;
 import org.apache.dubbo.rpc.support.DemoService;
 import org.apache.dubbo.rpc.support.Person;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import static org.apache.dubbo.common.constants.CommonConstants.$INVOKE;
+import static org.apache.dubbo.common.constants.CommonConstants.ENABLE_NATIVE_JAVA_GENERIC_SERIALIZE;
+import static org.apache.dubbo.common.constants.CommonConstants.GENERIC_SERIALIZATION_NATIVE_JAVA;
+import static org.apache.dubbo.rpc.Constants.GENERIC_KEY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.apache.dubbo.rpc.Constants.$INVOKE;
-import static org.apache.dubbo.rpc.Constants.GENERIC_SERIALIZATION_NATIVE_JAVA;
-import static org.apache.dubbo.rpc.Constants.GENERIC_KEY;
 
-public class GenericFilterTest {
+class GenericFilterTest {
     GenericFilter genericFilter = new GenericFilter();
 
     @Test
-    public void testInvokeWithDefault() throws Exception {
+    void testInvokeWithDefault() throws Exception {
 
         Method genericInvoke = GenericService.class.getMethods()[0];
 
@@ -54,27 +55,31 @@ public class GenericFilterTest {
         person.put("name", "dubbo");
         person.put("age", 10);
 
-        RpcInvocation invocation = new RpcInvocation($INVOKE, genericInvoke.getParameterTypes(),
-                new Object[]{"getPerson", new String[]{Person.class.getCanonicalName()}, new Object[]{person}});
+        RpcInvocation invocation = new RpcInvocation(
+                $INVOKE, GenericService.class.getName(), "", genericInvoke.getParameterTypes(), new Object[] {
+                    "getPerson", new String[] {Person.class.getCanonicalName()}, new Object[] {person}
+                });
 
-        URL url = URL.valueOf("test://test:11/org.apache.dubbo.rpc.support.DemoService?" +
-                "accesslog=true&group=dubbo&version=1.1");
+        URL url = URL.valueOf(
+                "test://test:11/org.apache.dubbo.rpc.support.DemoService?" + "accesslog=true&group=dubbo&version=1.1");
         Invoker invoker = Mockito.mock(Invoker.class);
-        when(invoker.invoke(any(Invocation.class))).thenReturn(AsyncRpcResult.newDefaultAsyncResult(new Person("person", 10), invocation));
+        when(invoker.invoke(any(Invocation.class)))
+                .thenReturn(AsyncRpcResult.newDefaultAsyncResult(new Person("person", 10), invocation));
         when(invoker.getUrl()).thenReturn(url);
         when(invoker.getInterface()).thenReturn(DemoService.class);
 
         Result asyncResult = genericFilter.invoke(invoker, invocation);
 
         AppResponse appResponse = (AppResponse) asyncResult.get();
-        genericFilter.listener().onResponse(appResponse, invoker, invocation);
+        genericFilter.onResponse(appResponse, invoker, invocation);
         Assertions.assertEquals(HashMap.class, appResponse.getValue().getClass());
         Assertions.assertEquals(10, ((HashMap) appResponse.getValue()).get("age"));
-
     }
 
     @Test
-    public void testInvokeWithJavaException() throws Exception {
+    void testInvokeWithJavaException() throws Exception {
+        // temporary enable native java generic serialize
+        System.setProperty(ENABLE_NATIVE_JAVA_GENERIC_SERIALIZE, "true");
         Assertions.assertThrows(RpcException.class, () -> {
             Method genericInvoke = GenericService.class.getMethods()[0];
 
@@ -82,12 +87,14 @@ public class GenericFilterTest {
             person.put("name", "dubbo");
             person.put("age", 10);
 
-            RpcInvocation invocation = new RpcInvocation($INVOKE, genericInvoke.getParameterTypes(),
-                    new Object[]{"getPerson", new String[]{Person.class.getCanonicalName()}, new Object[]{person}});
+            RpcInvocation invocation = new RpcInvocation(
+                    $INVOKE, GenericService.class.getName(), "", genericInvoke.getParameterTypes(), new Object[] {
+                        "getPerson", new String[] {Person.class.getCanonicalName()}, new Object[] {person}
+                    });
             invocation.setAttachment(GENERIC_KEY, GENERIC_SERIALIZATION_NATIVE_JAVA);
 
-            URL url = URL.valueOf("test://test:11/org.apache.dubbo.rpc.support.DemoService?" +
-                    "accesslog=true&group=dubbo&version=1.1");
+            URL url = URL.valueOf("test://test:11/org.apache.dubbo.rpc.support.DemoService?"
+                    + "accesslog=true&group=dubbo&version=1.1");
             Invoker invoker = Mockito.mock(Invoker.class);
             when(invoker.invoke(any(Invocation.class))).thenReturn(new AppResponse(new Person("person", 10)));
             when(invoker.getUrl()).thenReturn(url);
@@ -95,10 +102,11 @@ public class GenericFilterTest {
 
             genericFilter.invoke(invoker, invocation);
         });
+        System.clearProperty(ENABLE_NATIVE_JAVA_GENERIC_SERIALIZE);
     }
 
     @Test
-    public void testInvokeWithMethodNamtNot$Invoke() {
+    void testInvokeWithMethodNamtNot$Invoke() {
 
         Method genericInvoke = GenericService.class.getMethods()[0];
 
@@ -106,11 +114,13 @@ public class GenericFilterTest {
         person.put("name", "dubbo");
         person.put("age", 10);
 
-        RpcInvocation invocation = new RpcInvocation("sayHi", genericInvoke.getParameterTypes()
-                , new Object[]{"getPerson", new String[]{Person.class.getCanonicalName()}, new Object[]{person}});
+        RpcInvocation invocation = new RpcInvocation(
+                "sayHi", GenericService.class.getName(), "", genericInvoke.getParameterTypes(), new Object[] {
+                    "getPerson", new String[] {Person.class.getCanonicalName()}, new Object[] {person}
+                });
 
-        URL url = URL.valueOf("test://test:11/org.apache.dubbo.rpc.support.DemoService?" +
-                "accesslog=true&group=dubbo&version=1.1");
+        URL url = URL.valueOf(
+                "test://test:11/org.apache.dubbo.rpc.support.DemoService?" + "accesslog=true&group=dubbo&version=1.1");
         Invoker invoker = Mockito.mock(Invoker.class);
         when(invoker.invoke(any(Invocation.class))).thenReturn(new AppResponse(new Person("person", 10)));
         when(invoker.getUrl()).thenReturn(url);
@@ -122,7 +132,7 @@ public class GenericFilterTest {
     }
 
     @Test
-    public void testInvokeWithMethodArgumentSizeIsNot3() {
+    void testInvokeWithMethodArgumentSizeIsNot3() {
 
         Method genericInvoke = GenericService.class.getMethods()[0];
 
@@ -130,11 +140,13 @@ public class GenericFilterTest {
         person.put("name", "dubbo");
         person.put("age", 10);
 
-        RpcInvocation invocation = new RpcInvocation($INVOKE, genericInvoke.getParameterTypes()
-                , new Object[]{"getPerson", new String[]{Person.class.getCanonicalName()}});
+        RpcInvocation invocation = new RpcInvocation(
+                $INVOKE, GenericService.class.getName(), "", genericInvoke.getParameterTypes(), new Object[] {
+                    "getPerson", new String[] {Person.class.getCanonicalName()}
+                });
 
-        URL url = URL.valueOf("test://test:11/org.apache.dubbo.rpc.support.DemoService?" +
-                "accesslog=true&group=dubbo&version=1.1");
+        URL url = URL.valueOf(
+                "test://test:11/org.apache.dubbo.rpc.support.DemoService?" + "accesslog=true&group=dubbo&version=1.1");
         Invoker invoker = Mockito.mock(Invoker.class);
         when(invoker.invoke(any(Invocation.class))).thenReturn(new AppResponse(new Person("person", 10)));
         when(invoker.getUrl()).thenReturn(url);
@@ -144,5 +156,4 @@ public class GenericFilterTest {
         Assertions.assertEquals(Person.class, result.getValue().getClass());
         Assertions.assertEquals(10, ((Person) (result.getValue())).getAge());
     }
-
 }

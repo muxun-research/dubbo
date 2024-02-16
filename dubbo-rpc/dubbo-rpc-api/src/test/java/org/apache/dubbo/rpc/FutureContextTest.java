@@ -16,23 +16,25 @@
  */
 package org.apache.dubbo.rpc;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-
-import java.util.concurrent.CompletableFuture;
 
 /**
  *
  */
-public class FutureContextTest {
+class FutureContextTest {
 
     @Test
-    public void testFutureContext() throws Exception {
+    void testFutureContext() throws Exception {
         Thread thread1 = new Thread(() -> {
             FutureContext.getContext().setFuture(CompletableFuture.completedFuture("future from thread1"));
             try {
                 Thread.sleep(500);
-                Assertions.assertEquals("future from thread1", FutureContext.getContext().getCompletableFuture().get());
+                Assertions.assertEquals(
+                        "future from thread1",
+                        FutureContext.getContext().getCompletableFuture().get());
             } catch (Exception e) {
                 e.printStackTrace();
             }

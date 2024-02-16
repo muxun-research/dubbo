@@ -16,8 +16,8 @@
  */
 package org.apache.dubbo.remoting;
 
+import org.apache.dubbo.common.extension.ExtensionScope;
 import org.apache.dubbo.common.extension.SPI;
-
 
 /**
  * ChannelHandler. (API, Prototype, ThreadSafe)
@@ -25,7 +25,7 @@ import org.apache.dubbo.common.extension.SPI;
  * @see org.apache.dubbo.remoting.Transporter#bind(org.apache.dubbo.common.URL, ChannelHandler)
  * @see org.apache.dubbo.remoting.Transporter#connect(org.apache.dubbo.common.URL, ChannelHandler)
  */
-@SPI
+@SPI(scope = ExtensionScope.FRAMEWORK)
 public interface ChannelHandler {
 
     /**
@@ -65,5 +65,4 @@ public interface ChannelHandler {
      * @param exception exception.
      */
     void caught(Channel channel, Throwable exception) throws RemotingException;
-
 }

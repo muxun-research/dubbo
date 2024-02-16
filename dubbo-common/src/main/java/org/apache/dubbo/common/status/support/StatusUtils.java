@@ -36,7 +36,7 @@ public class StatusUtils {
             if (Level.ERROR.equals(l)) {
                 level = Level.ERROR;
                 if (msg.length() > 0) {
-                    msg.append(",");
+                    msg.append(',');
                 }
                 msg.append(key);
             } else if (Level.WARN.equals(l)) {
@@ -44,12 +44,11 @@ public class StatusUtils {
                     level = Level.WARN;
                 }
                 if (msg.length() > 0) {
-                    msg.append(",");
+                    msg.append(',');
                 }
                 msg.append(key);
             }
         }
         return new Status(level, msg.toString());
     }
-
 }

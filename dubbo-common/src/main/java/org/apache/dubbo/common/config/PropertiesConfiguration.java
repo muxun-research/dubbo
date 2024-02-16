@@ -16,26 +16,53 @@
  */
 package org.apache.dubbo.common.config;
 
-import org.apache.dubbo.common.logger.Logger;
-import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.ConfigUtils;
+import org.apache.dubbo.rpc.model.ScopeModel;
+
+import java.util.Map;
+import java.util.Properties;
 
 /**
  * Configuration from system properties and dubbo.properties
  */
-public class PropertiesConfiguration extends AbstractPrefixConfiguration {
-    private static final Logger logger = LoggerFactory.getLogger(PropertiesConfiguration.class);
+public class PropertiesConfiguration implements Configuration {
 
-    public PropertiesConfiguration(String prefix, String id) {
-        super(prefix, id);
+    private Properties properties;
+    private final ScopeModel scopeModel;
+
+    public PropertiesConfiguration(ScopeModel scopeModel) {
+        this.scopeModel = scopeModel;
+        refresh();
     }
 
-    public PropertiesConfiguration() {
-        this(null, null);
+    public void refresh() {
+        properties = ConfigUtils.getProperties(scopeModel.getClassLoaders());
+    }
+
+    @Override
+    public String getProperty(String key) {
+        return properties.getProperty(key);
     }
 
     @Override
     public Object getInternalProperty(String key) {
-        return ConfigUtils.getProperty(key);
+        return properties.getProperty(key);
+    }
+
+    public void setProperty(String key, String value) {
+        properties.setProperty(key, value);
+    }
+
+    public String remove(String key) {
+        return (String) properties.remove(key);
+    }
+
+    @Deprecated
+    public void setProperties(Properties properties) {
+        this.properties = properties;
+    }
+
+    public Map<String, String> getProperties() {
+        return (Map) properties;
     }
 }

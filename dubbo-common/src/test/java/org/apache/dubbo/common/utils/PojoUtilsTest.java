@@ -19,38 +19,51 @@ package org.apache.dubbo.common.utils;
 import org.apache.dubbo.common.model.Person;
 import org.apache.dubbo.common.model.SerializablePerson;
 import org.apache.dubbo.common.model.User;
+import org.apache.dubbo.common.model.person.Ageneric;
+import org.apache.dubbo.common.model.person.Bgeneric;
 import org.apache.dubbo.common.model.person.BigPerson;
+import org.apache.dubbo.common.model.person.Cgeneric;
+import org.apache.dubbo.common.model.person.Dgeneric;
 import org.apache.dubbo.common.model.person.FullAddress;
 import org.apache.dubbo.common.model.person.PersonInfo;
+import org.apache.dubbo.common.model.person.PersonMap;
 import org.apache.dubbo.common.model.person.PersonStatus;
 import org.apache.dubbo.common.model.person.Phone;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
+import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class PojoUtilsTest {
+class PojoUtilsTest {
 
     BigPerson bigPerson;
 
@@ -109,7 +122,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_primitive() throws Exception {
+    void test_primitive() throws Exception {
         assertObject(Boolean.TRUE);
         assertObject(Boolean.FALSE);
 
@@ -129,23 +142,24 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_pojo() throws Exception {
+    void test_pojo() throws Exception {
         assertObject(new Person());
-        assertObject(new SerializablePerson());
+        assertObject(new BasicTestData(false, '\0', (byte) 0, (short) 0, 0, 0L, 0F, 0D));
+        assertObject(new SerializablePerson(Character.MIN_VALUE, false));
     }
 
     @Test
-    public void test_has_no_nullary_constructor_pojo() {
-        assertObject(new User(1,"fibbery"));
+    void test_has_no_nullary_constructor_pojo() {
+        assertObject(new User(1, "fibbery"));
     }
 
     @Test
-    public void test_Map_List_pojo() throws Exception {
+    void test_Map_List_pojo() throws Exception {
         Map<String, List<Object>> map = new HashMap<String, List<Object>>();
 
         List<Object> list = new ArrayList<Object>();
         list.add(new Person());
-        list.add(new SerializablePerson());
+        list.add(new SerializablePerson(Character.MIN_VALUE, false));
 
         map.put("k", list);
 
@@ -155,51 +169,55 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_PrimitiveArray() throws Exception {
-        assertObject(new boolean[]{true, false});
-        assertObject(new Boolean[]{true, false, true});
+    void test_PrimitiveArray() throws Exception {
+        assertObject(new boolean[] {true, false});
+        assertObject(new Boolean[] {true, false, true});
 
-        assertObject(new byte[]{1, 12, 28, 78});
-        assertObject(new Byte[]{1, 12, 28, 78});
+        assertObject(new byte[] {1, 12, 28, 78});
+        assertObject(new Byte[] {1, 12, 28, 78});
 
-        assertObject(new char[]{'a', '中', '无'});
-        assertObject(new Character[]{'a', '中', '无'});
+        assertObject(new char[] {'a', '中', '无'});
+        assertObject(new Character[] {'a', '中', '无'});
 
-        assertObject(new short[]{37, 39, 12});
-        assertObject(new Short[]{37, 39, 12});
+        assertObject(new short[] {37, 39, 12});
+        assertObject(new Short[] {37, 39, 12});
 
-        assertObject(new int[]{37, -39, 12456});
-        assertObject(new Integer[]{37, -39, 12456});
+        assertObject(new int[] {37, -39, 12456});
+        assertObject(new Integer[] {37, -39, 12456});
 
-        assertObject(new long[]{37L, -39L, 123456789L});
-        assertObject(new Long[]{37L, -39L, 123456789L});
+        assertObject(new long[] {37L, -39L, 123456789L});
+        assertObject(new Long[] {37L, -39L, 123456789L});
 
-        assertObject(new float[]{37F, -3.14F, 123456.7F});
-        assertObject(new Float[]{37F, -39F, 123456.7F});
+        assertObject(new float[] {37F, -3.14F, 123456.7F});
+        assertObject(new Float[] {37F, -39F, 123456.7F});
 
-        assertObject(new double[]{37D, -3.14D, 123456.7D});
-        assertObject(new Double[]{37D, -39D, 123456.7D});
+        assertObject(new double[] {37D, -3.14D, 123456.7D});
+        assertObject(new Double[] {37D, -39D, 123456.7D});
 
+        assertArrayObject(new Boolean[] {true, false, true});
 
-        assertArrayObject(new Boolean[]{true, false, true});
+        assertArrayObject(new Byte[] {1, 12, 28, 78});
 
-        assertArrayObject(new Byte[]{1, 12, 28, 78});
+        assertArrayObject(new Character[] {'a', '中', '无'});
 
-        assertArrayObject(new Character[]{'a', '中', '无'});
+        assertArrayObject(new Short[] {37, 39, 12});
 
-        assertArrayObject(new Short[]{37, 39, 12});
+        assertArrayObject(new Integer[] {37, -39, 12456});
 
-        assertArrayObject(new Integer[]{37, -39, 12456});
+        assertArrayObject(new Long[] {37L, -39L, 123456789L});
 
-        assertArrayObject(new Long[]{37L, -39L, 123456789L});
+        assertArrayObject(new Float[] {37F, -39F, 123456.7F});
 
-        assertArrayObject(new Float[]{37F, -39F, 123456.7F});
+        assertArrayObject(new Double[] {37D, -39D, 123456.7D});
 
-        assertArrayObject(new Double[]{37D, -39D, 123456.7D});
+        assertObject(new int[][] {{37, -39, 12456}});
+        assertObject(new Integer[][][] {{{37, -39, 12456}}});
+
+        assertArrayObject(new Integer[] {37, -39, 12456});
     }
 
     @Test
-    public void test_PojoArray() throws Exception {
+    void test_PojoArray() throws Exception {
         Person[] array = new Person[2];
         array[0] = new Person();
         {
@@ -211,7 +229,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testArrayToCollection() throws Exception {
+    void testArrayToCollection() throws Exception {
         Person[] array = new Person[2];
         Person person1 = new Person();
         person1.setName("person1");
@@ -226,7 +244,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testCollectionToArray() throws Exception {
+    void testCollectionToArray() throws Exception {
         Person person1 = new Person();
         person1.setName("person1");
         Person person2 = new Person();
@@ -241,7 +259,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testMapToEnum() throws Exception {
+    void testMapToEnum() throws Exception {
         Map map = new HashMap();
         map.put("name", "MONDAY");
         Object o = PojoUtils.realize(map, Day.class);
@@ -249,8 +267,8 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testGeneralizeEnumArray() throws Exception {
-        Object days = new Enum[]{Day.FRIDAY, Day.SATURDAY};
+    void testGeneralizeEnumArray() throws Exception {
+        Object days = new Enum[] {Day.FRIDAY, Day.SATURDAY};
         Object o = PojoUtils.generalize(days);
         assertTrue(o instanceof String[]);
         assertEquals(((String[]) o)[0], "FRIDAY");
@@ -258,15 +276,15 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testGeneralizePersons() throws Exception {
-        Object persons = new Person[]{new Person(), new Person()};
+    void testGeneralizePersons() throws Exception {
+        Object persons = new Person[] {new Person(), new Person()};
         Object o = PojoUtils.generalize(persons);
         assertTrue(o instanceof Object[]);
         assertEquals(((Object[]) o).length, 2);
     }
 
     @Test
-    public void testMapToInterface() throws Exception {
+    void testMapToInterface() throws Exception {
         Map map = new HashMap();
         map.put("content", "greeting");
         map.put("from", "dubbo");
@@ -279,7 +297,39 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testException() throws Exception {
+    void testJsonObjectToMap() throws Exception {
+        Method method = PojoUtilsTest.class.getMethod("setMap", Map.class);
+        assertNotNull(method);
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("1", "test");
+        @SuppressWarnings("unchecked")
+        Map<Integer, Object> value = (Map<Integer, Object>)
+                PojoUtils.realize(jsonObject, method.getParameterTypes()[0], method.getGenericParameterTypes()[0]);
+        method.invoke(new PojoUtilsTest(), value);
+        assertEquals("test", value.get(1));
+    }
+
+    @Test
+    void testListJsonObjectToListMap() throws Exception {
+        Method method = PojoUtilsTest.class.getMethod("setListMap", List.class);
+        assertNotNull(method);
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("1", "test");
+        List<JSONObject> list = new ArrayList<>(1);
+        list.add(jsonObject);
+        @SuppressWarnings("unchecked")
+        List<Map<Integer, Object>> result = (List<Map<Integer, Object>>)
+                PojoUtils.realize(list, method.getParameterTypes()[0], method.getGenericParameterTypes()[0]);
+        method.invoke(new PojoUtilsTest(), result);
+        assertEquals("test", result.get(0).get(1));
+    }
+
+    public void setMap(Map<Integer, Object> map) {}
+
+    public void setListMap(List<Map<Integer, Object>> list) {}
+
+    @Test
+    void testException() throws Exception {
         Map map = new HashMap();
         map.put("message", "dubbo exception");
         Object o = PojoUtils.realize(map, RuntimeException.class);
@@ -287,7 +337,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testIsPojo() throws Exception {
+    void testIsPojo() throws Exception {
         assertFalse(PojoUtils.isPojo(boolean.class));
         assertFalse(PojoUtils.isPojo(Map.class));
         assertFalse(PojoUtils.isPojo(List.class));
@@ -305,7 +355,7 @@ public class PojoUtilsTest {
     public Type getType(String methodName) {
         Method method;
         try {
-            method = getClass().getDeclaredMethod(methodName, new Class<?>[]{});
+            method = getClass().getDeclaredMethod(methodName, new Class<?>[] {});
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -314,7 +364,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_simpleCollection() throws Exception {
+    void test_simpleCollection() throws Exception {
         Type gtype = getType("returnListPersonMethod");
         List<Person> list = new ArrayList<Person>();
         list.add(new Person());
@@ -327,7 +377,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_total() throws Exception {
+    void test_total() throws Exception {
         Object generalize = PojoUtils.generalize(bigPerson);
         Type gtype = getType("returnBigPersonMethod");
         Object realize = PojoUtils.realize(generalize, BigPerson.class, gtype);
@@ -335,8 +385,8 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_total_Array() throws Exception {
-        Object[] persons = new Object[]{bigPerson, bigPerson, bigPerson};
+    void test_total_Array() throws Exception {
+        Object[] persons = new Object[] {bigPerson, bigPerson, bigPerson};
 
         Object generalize = PojoUtils.generalize(persons);
         Object[] realize = (Object[]) PojoUtils.realize(generalize, Object[].class);
@@ -344,7 +394,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_Loop_pojo() throws Exception {
+    void test_Loop_pojo() throws Exception {
         Parent p = new Parent();
         p.setAge(10);
         p.setName("jerry");
@@ -366,7 +416,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_Loop_Map() throws Exception {
+    void test_Loop_Map() throws Exception {
         Map<String, Object> map = new HashMap<String, Object>();
 
         map.put("k", "v");
@@ -384,7 +434,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_LoopPojoInMap() throws Exception {
+    void test_LoopPojoInMap() throws Exception {
         Parent p = new Parent();
         p.setAge(10);
         p.setName("jerry");
@@ -400,7 +450,8 @@ public class PojoUtilsTest {
 
         Object generalize = PojoUtils.generalize(map);
         @SuppressWarnings("unchecked")
-        Map<String, Object> realize = (Map<String, Object>) PojoUtils.realize(generalize, Map.class, getType("getMapGenericType"));
+        Map<String, Object> realize =
+                (Map<String, Object>) PojoUtils.realize(generalize, Map.class, getType("getMapGenericType"));
 
         Parent parent = (Parent) realize.get("k");
 
@@ -412,7 +463,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void test_LoopPojoInList() throws Exception {
+    void test_LoopPojoInList() throws Exception {
         Parent p = new Parent();
         p.setAge(10);
         p.setName("jerry");
@@ -438,12 +489,13 @@ public class PojoUtilsTest {
         assertEquals("haha", parent.getChild().getToy());
         assertSame(parent, parent.getChild().getParent());
 
-        Object[] objects = PojoUtils.realize(new Object[]{generalize}, new Class[]{List.class}, new Type[]{getType("getListGenericType")});
+        Object[] objects = PojoUtils.realize(
+                new Object[] {generalize}, new Class[] {List.class}, new Type[] {getType("getListGenericType")});
         assertTrue(((List) objects[0]).get(0) instanceof Parent);
     }
 
     @Test
-    public void test_PojoInList() throws Exception {
+    void test_PojoInList() throws Exception {
         Parent p = new Parent();
         p.setAge(10);
         p.setName("jerry");
@@ -461,11 +513,9 @@ public class PojoUtilsTest {
         assertEquals("jerry", parent.getName());
     }
 
-    public void setLong(long l) {
-    }
+    public void setLong(long l) {}
 
-    public void setInt(int l) {
-    }
+    public void setInt(int l) {}
 
     public List<Parent> getListGenericType() {
         return null;
@@ -477,18 +527,19 @@ public class PojoUtilsTest {
 
     // java.lang.IllegalArgumentException: argument type mismatch
     @Test
-    public void test_realize_LongPararmter_IllegalArgumentException() throws Exception {
+    void test_realize_LongPararmter_IllegalArgumentException() throws Exception {
         Method method = PojoUtilsTest.class.getMethod("setLong", long.class);
         assertNotNull(method);
 
-        Object value = PojoUtils.realize("563439743927993", method.getParameterTypes()[0], method.getGenericParameterTypes()[0]);
+        Object value = PojoUtils.realize(
+                "563439743927993", method.getParameterTypes()[0], method.getGenericParameterTypes()[0]);
 
         method.invoke(new PojoUtilsTest(), value);
     }
 
     // java.lang.IllegalArgumentException: argument type mismatch
     @Test
-    public void test_realize_IntPararmter_IllegalArgumentException() throws Exception {
+    void test_realize_IntPararmter_IllegalArgumentException() throws Exception {
         Method method = PojoUtilsTest.class.getMethod("setInt", int.class);
         assertNotNull(method);
 
@@ -498,7 +549,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testStackOverflow() throws Exception {
+    void testStackOverflow() throws Exception {
         Parent parent = Parent.getNewParent();
         parent.setAge(Integer.MAX_VALUE);
         String name = UUID.randomUUID().toString();
@@ -515,7 +566,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testGenerializeAndRealizeClass() throws Exception {
+    void testGenerializeAndRealizeClass() throws Exception {
         Object generalize = PojoUtils.generalize(Integer.class);
         assertEquals(Integer.class.getName(), generalize);
         Object real = PojoUtils.realize(generalize, Integer.class.getClass());
@@ -528,7 +579,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testPublicField() throws Exception {
+    void testPublicField() throws Exception {
         Parent parent = new Parent();
         parent.gender = "female";
         parent.email = "email@host.com";
@@ -548,7 +599,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testMapField() throws Exception {
+    void testMapField() throws Exception {
         TestData data = new TestData();
         Child child = newChild("first", 1);
         data.addChild(child);
@@ -566,8 +617,10 @@ public class PojoUtilsTest {
         assertSame(data.getList().get(0).getClass(), Child.class);
 
         TestData realizadData = (TestData) PojoUtils.realize(obj, TestData.class);
-        Assertions.assertEquals(data.getChildren().size(), realizadData.getChildren().size());
-        Assertions.assertEquals(data.getChildren().keySet(), realizadData.getChildren().keySet());
+        Assertions.assertEquals(
+                data.getChildren().size(), realizadData.getChildren().size());
+        Assertions.assertEquals(
+                data.getChildren().keySet(), realizadData.getChildren().keySet());
         for (Map.Entry<String, Child> entry : data.getChildren().entrySet()) {
             Child c = realizadData.getChildren().get(entry.getKey());
             Assertions.assertNotNull(c);
@@ -576,25 +629,27 @@ public class PojoUtilsTest {
         }
 
         Assertions.assertEquals(1, realizadData.getList().size());
-        Assertions.assertEquals(data.getList().get(0).getName(), realizadData.getList().get(0).getName());
-        Assertions.assertEquals(data.getList().get(0).getAge(), realizadData.getList().get(0).getAge());
+        Assertions.assertEquals(
+                data.getList().get(0).getName(), realizadData.getList().get(0).getName());
+        Assertions.assertEquals(
+                data.getList().get(0).getAge(), realizadData.getList().get(0).getAge());
     }
 
     @Test
-    public void testRealize() throws Exception {
+    void testRealize() throws Exception {
         Map<String, String> map = new LinkedHashMap<String, String>();
         map.put("key", "value");
         Object obj = PojoUtils.generalize(map);
         assertTrue(obj instanceof LinkedHashMap);
         Object outputObject = PojoUtils.realize(map, LinkedHashMap.class);
         assertTrue(outputObject instanceof LinkedHashMap);
-        Object[] objects = PojoUtils.realize(new Object[]{map}, new Class[]{LinkedHashMap.class});
+        Object[] objects = PojoUtils.realize(new Object[] {map}, new Class[] {LinkedHashMap.class});
         assertTrue(objects[0] instanceof LinkedHashMap);
         assertEquals(objects[0], outputObject);
     }
 
     @Test
-    public void testRealizeLinkedList() throws Exception {
+    void testRealizeLinkedList() throws Exception {
         LinkedList<Person> input = new LinkedList<Person>();
         Person person = new Person();
         person.setAge(37);
@@ -607,7 +662,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testPojoList() throws Exception {
+    void testPojoList() throws Exception {
         ListResult<Parent> result = new ListResult<Parent>();
         List<Parent> list = new ArrayList<Parent>();
         Parent parent = new Parent();
@@ -629,7 +684,7 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testListPojoListPojo() throws Exception {
+    void testListPojoListPojo() throws Exception {
         InnerPojo<Parent> parentList = new InnerPojo<Parent>();
         Parent parent = new Parent();
         parent.setName("zhangsan");
@@ -656,35 +711,35 @@ public class PojoUtilsTest {
     }
 
     @Test
-    public void testDateTimeTimestamp() throws Exception {
+    void testDateTimeTimestamp() throws Exception {
         String dateStr = "2018-09-12";
         String timeStr = "10:12:33";
         String dateTimeStr = "2018-09-12 10:12:33";
-        String[] dateFormat = new String[]{"yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd", "HH:mm:ss"};
+        String[] dateFormat = new String[] {"yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd", "HH:mm:ss"};
 
-        //java.util.Date
+        // java.util.Date
         Object date = PojoUtils.realize(dateTimeStr, Date.class, (Type) Date.class);
         assertEquals(Date.class, date.getClass());
         assertEquals(dateTimeStr, new SimpleDateFormat(dateFormat[0]).format(date));
 
-        //java.sql.Time
+        // java.sql.Time
         Object time = PojoUtils.realize(dateTimeStr, java.sql.Time.class, (Type) java.sql.Time.class);
         assertEquals(java.sql.Time.class, time.getClass());
         assertEquals(timeStr, new SimpleDateFormat(dateFormat[2]).format(time));
 
-        //java.sql.Date
+        // java.sql.Date
         Object sqlDate = PojoUtils.realize(dateTimeStr, java.sql.Date.class, (Type) java.sql.Date.class);
         assertEquals(java.sql.Date.class, sqlDate.getClass());
         assertEquals(dateStr, new SimpleDateFormat(dateFormat[1]).format(sqlDate));
 
-        //java.sql.Timestamp
+        // java.sql.Timestamp
         Object timestamp = PojoUtils.realize(dateTimeStr, java.sql.Timestamp.class, (Type) java.sql.Timestamp.class);
         assertEquals(java.sql.Timestamp.class, timestamp.getClass());
         assertEquals(dateTimeStr, new SimpleDateFormat(dateFormat[0]).format(timestamp));
     }
 
     @Test
-    public void testIntToBoolean() throws Exception {
+    void testIntToBoolean() throws Exception {
         Map<String, Object> map = new HashMap<>();
         map.put("name", "myname");
         map.put("male", 1);
@@ -696,9 +751,9 @@ public class PojoUtilsTest {
         assertTrue(personInfo.isMale());
         assertFalse(personInfo.isFemale());
     }
-  
+
     @Test
-    public void testRealizeCollectionWithNullElement() {
+    void testRealizeCollectionWithNullElement() {
         LinkedList<String> listStr = new LinkedList<>();
         listStr.add("arrayValue");
         listStr.add(null);
@@ -715,11 +770,381 @@ public class PojoUtilsTest {
         assertEquals(setResult, setStr);
     }
 
-    public enum Day {
-        SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY
+    @Test
+    void testJava8Time() {
+
+        Object localDateTimeGen = PojoUtils.generalize(LocalDateTime.now());
+        Object localDateTime = PojoUtils.realize(localDateTimeGen, LocalDateTime.class);
+        assertEquals(localDateTimeGen, localDateTime.toString());
+
+        Object localDateGen = PojoUtils.generalize(LocalDate.now());
+        Object localDate = PojoUtils.realize(localDateGen, LocalDate.class);
+        assertEquals(localDateGen, localDate.toString());
+
+        Object localTimeGen = PojoUtils.generalize(LocalTime.now());
+        Object localTime = PojoUtils.realize(localTimeGen, LocalTime.class);
+        assertEquals(localTimeGen, localTime.toString());
     }
 
-    public static class Parent {
+    @Test
+    public void testJSONObjectToPersonMapPojo() {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("personId", "1");
+        jsonObject.put("personName", "hand");
+        Object result = PojoUtils.realize(jsonObject, PersonMap.class);
+        assertEquals(PersonMap.class, result.getClass());
+    }
+
+    protected PersonInfo createPersonInfoByName(String name) {
+        PersonInfo dataPerson = new PersonInfo();
+        dataPerson.setName(name);
+        return dataPerson;
+    }
+
+    protected Ageneric<PersonInfo> createAGenericPersonInfo(String name) {
+        Ageneric<PersonInfo> ret = new Ageneric();
+        ret.setData(createPersonInfoByName(name));
+        return ret;
+    }
+
+    protected Bgeneric<PersonInfo> createBGenericPersonInfo(String name) {
+        Bgeneric<PersonInfo> ret = new Bgeneric();
+        ret.setData(createPersonInfoByName(name));
+        return ret;
+    }
+
+    @Test
+    public void testPojoGeneric1() throws NoSuchMethodException {
+        String personName = "testName";
+
+        {
+            Ageneric<PersonInfo> genericPersonInfo = createAGenericPersonInfo(personName);
+
+            Object o = JSON.toJSON(genericPersonInfo);
+            {
+                Ageneric personInfo = (Ageneric) PojoUtils.realize(o, Ageneric.class);
+
+                assertEquals(Ageneric.NAME, personInfo.getName());
+                assertTrue(personInfo.getData() instanceof Map);
+            }
+            {
+                Type[] createGenericPersonInfos = ReflectUtils.getReturnTypes(
+                        PojoUtilsTest.class.getDeclaredMethod("createAGenericPersonInfo", String.class));
+                Ageneric personInfo = (Ageneric)
+                        PojoUtils.realize(o, (Class) createGenericPersonInfos[0], createGenericPersonInfos[1]);
+
+                assertEquals(Ageneric.NAME, personInfo.getName());
+                assertEquals(personInfo.getData().getClass(), PersonInfo.class);
+                assertEquals(personName, ((PersonInfo) personInfo.getData()).getName());
+            }
+        }
+        {
+            Bgeneric<PersonInfo> genericPersonInfo = createBGenericPersonInfo(personName);
+
+            Object o = JSON.toJSON(genericPersonInfo);
+            {
+                Bgeneric personInfo = (Bgeneric) PojoUtils.realize(o, Bgeneric.class);
+
+                assertEquals(Bgeneric.NAME, personInfo.getName());
+                assertTrue(personInfo.getData() instanceof Map);
+            }
+            {
+                Type[] createGenericPersonInfos = ReflectUtils.getReturnTypes(
+                        PojoUtilsTest.class.getDeclaredMethod("createBGenericPersonInfo", String.class));
+                Bgeneric personInfo = (Bgeneric)
+                        PojoUtils.realize(o, (Class) createGenericPersonInfos[0], createGenericPersonInfos[1]);
+
+                assertEquals(Bgeneric.NAME, personInfo.getName());
+                assertEquals(personInfo.getData().getClass(), PersonInfo.class);
+                assertEquals(personName, ((PersonInfo) personInfo.getData()).getName());
+            }
+        }
+    }
+
+    protected Ageneric<Ageneric<PersonInfo>> createAGenericLoop(String name) {
+        Ageneric<Ageneric<PersonInfo>> ret = new Ageneric();
+        ret.setData(createAGenericPersonInfo(name));
+        return ret;
+    }
+
+    protected Bgeneric<Ageneric<PersonInfo>> createBGenericWithAgeneric(String name) {
+        Bgeneric<Ageneric<PersonInfo>> ret = new Bgeneric();
+        ret.setData(createAGenericPersonInfo(name));
+        return ret;
+    }
+
+    @Test
+    public void testPojoGeneric2() throws NoSuchMethodException {
+        String personName = "testName";
+
+        {
+            Ageneric<Ageneric<PersonInfo>> generic2PersonInfo = createAGenericLoop(personName);
+            Object o = JSON.toJSON(generic2PersonInfo);
+            {
+                Ageneric personInfo = (Ageneric) PojoUtils.realize(o, Ageneric.class);
+
+                assertEquals(Ageneric.NAME, personInfo.getName());
+                assertTrue(personInfo.getData() instanceof Map);
+            }
+            {
+                Type[] createGenericPersonInfos = ReflectUtils.getReturnTypes(
+                        PojoUtilsTest.class.getDeclaredMethod("createAGenericLoop", String.class));
+                Ageneric personInfo = (Ageneric)
+                        PojoUtils.realize(o, (Class) createGenericPersonInfos[0], createGenericPersonInfos[1]);
+
+                assertEquals(Ageneric.NAME, personInfo.getName());
+                assertEquals(personInfo.getData().getClass(), Ageneric.class);
+                assertEquals(Ageneric.NAME, ((Ageneric) personInfo.getData()).getName());
+                assertEquals(((Ageneric) personInfo.getData()).getData().getClass(), PersonInfo.class);
+                assertEquals(personName, ((PersonInfo) ((Ageneric) personInfo.getData()).getData()).getName());
+            }
+        }
+        {
+            Bgeneric<Ageneric<PersonInfo>> generic = createBGenericWithAgeneric(personName);
+            Object o = JSON.toJSON(generic);
+            {
+                Ageneric personInfo = (Ageneric) PojoUtils.realize(o, Ageneric.class);
+
+                assertEquals(Bgeneric.NAME, personInfo.getName());
+                assertTrue(personInfo.getData() instanceof Map);
+            }
+            {
+                Type[] createGenericPersonInfos = ReflectUtils.getReturnTypes(
+                        PojoUtilsTest.class.getDeclaredMethod("createBGenericWithAgeneric", String.class));
+                Bgeneric personInfo = (Bgeneric)
+                        PojoUtils.realize(o, (Class) createGenericPersonInfos[0], createGenericPersonInfos[1]);
+
+                assertEquals(Bgeneric.NAME, personInfo.getName());
+                assertEquals(personInfo.getData().getClass(), Ageneric.class);
+                assertEquals(Ageneric.NAME, ((Ageneric) personInfo.getData()).getName());
+                assertEquals(((Ageneric) personInfo.getData()).getData().getClass(), PersonInfo.class);
+                assertEquals(personName, ((PersonInfo) ((Ageneric) personInfo.getData()).getData()).getName());
+            }
+        }
+    }
+
+    protected Cgeneric<PersonInfo> createCGenericPersonInfo(String name) {
+        Cgeneric<PersonInfo> ret = new Cgeneric();
+        ret.setData(createPersonInfoByName(name));
+        ret.setA(createAGenericPersonInfo(name));
+        ret.setB(createBGenericPersonInfo(name));
+        return ret;
+    }
+
+    @Test
+    public void testPojoGeneric3() throws NoSuchMethodException {
+        String personName = "testName";
+
+        Cgeneric<PersonInfo> generic = createCGenericPersonInfo(personName);
+        Object o = JSON.toJSON(generic);
+        {
+            Cgeneric personInfo = (Cgeneric) PojoUtils.realize(o, Cgeneric.class);
+
+            assertEquals(Cgeneric.NAME, personInfo.getName());
+            assertTrue(personInfo.getData() instanceof Map);
+            assertTrue(personInfo.getA().getData() instanceof Map);
+            assertTrue(personInfo.getB().getData() instanceof PersonInfo);
+        }
+        {
+            Type[] createGenericPersonInfos = ReflectUtils.getReturnTypes(
+                    PojoUtilsTest.class.getDeclaredMethod("createCGenericPersonInfo", String.class));
+            Cgeneric personInfo =
+                    (Cgeneric) PojoUtils.realize(o, (Class) createGenericPersonInfos[0], createGenericPersonInfos[1]);
+
+            assertEquals(Cgeneric.NAME, personInfo.getName());
+            assertEquals(personInfo.getData().getClass(), PersonInfo.class);
+            assertEquals(personName, ((PersonInfo) personInfo.getData()).getName());
+
+            assertEquals(personInfo.getA().getClass(), Ageneric.class);
+            assertEquals(personInfo.getA().getData().getClass(), PersonInfo.class);
+            assertEquals(personInfo.getB().getClass(), Bgeneric.class);
+            assertEquals(personInfo.getB().getData().getClass(), PersonInfo.class);
+        }
+    }
+
+    protected Dgeneric<Ageneric<PersonInfo>, Bgeneric<PersonInfo>, Cgeneric<PersonInfo>> createDGenericPersonInfo(
+            String name) {
+        Dgeneric<Ageneric<PersonInfo>, Bgeneric<PersonInfo>, Cgeneric<PersonInfo>> ret = new Dgeneric();
+        ret.setT(createAGenericPersonInfo(name));
+        ret.setY(createBGenericPersonInfo(name));
+        ret.setZ(createCGenericPersonInfo(name));
+        return ret;
+    }
+
+    @Test
+    public void testPojoGeneric4() throws NoSuchMethodException {
+        String personName = "testName";
+
+        Dgeneric generic = createDGenericPersonInfo(personName);
+        Object o = JSON.toJSON(generic);
+        {
+            Dgeneric personInfo = (Dgeneric) PojoUtils.realize(o, Dgeneric.class);
+
+            assertEquals(Dgeneric.NAME, personInfo.getName());
+            assertTrue(personInfo.getT() instanceof Map);
+            assertTrue(personInfo.getY() instanceof Map);
+            assertTrue(personInfo.getZ() instanceof Map);
+        }
+        {
+            Type[] createGenericPersonInfos = ReflectUtils.getReturnTypes(
+                    PojoUtilsTest.class.getDeclaredMethod("createDGenericPersonInfo", String.class));
+            Dgeneric personInfo =
+                    (Dgeneric) PojoUtils.realize(o, (Class) createGenericPersonInfos[0], createGenericPersonInfos[1]);
+
+            assertEquals(Dgeneric.NAME, personInfo.getName());
+
+            assertEquals(personInfo.getT().getClass(), Ageneric.class);
+            assertEquals(((Ageneric) personInfo.getT()).getData().getClass(), PersonInfo.class);
+            assertEquals(personInfo.getY().getClass(), Bgeneric.class);
+            assertEquals(((Bgeneric) personInfo.getY()).getData().getClass(), PersonInfo.class);
+            assertEquals(personInfo.getZ().getClass(), Cgeneric.class);
+            assertEquals(((Cgeneric) personInfo.getZ()).getData().getClass(), PersonInfo.class);
+
+            assertEquals(personInfo.getZ().getClass(), Cgeneric.class);
+            assertEquals(((Cgeneric) personInfo.getZ()).getA().getClass(), Ageneric.class);
+            assertEquals(((Cgeneric) personInfo.getZ()).getA().getData().getClass(), PersonInfo.class);
+            assertEquals(((Cgeneric) personInfo.getZ()).getB().getClass(), Bgeneric.class);
+            assertEquals(((Cgeneric) personInfo.getZ()).getB().getData().getClass(), PersonInfo.class);
+        }
+    }
+
+    @Test
+    void testNameNotMatch() {
+        NameNotMatch origin = new NameNotMatch();
+        origin.setNameA("test123");
+        origin.setNameB("test234");
+
+        Object generalized = PojoUtils.generalize(origin);
+
+        Assertions.assertInstanceOf(Map.class, generalized);
+        Assertions.assertEquals("test123", ((Map) generalized).get("nameA"));
+        Assertions.assertEquals("test234", ((Map) generalized).get("nameB"));
+
+        NameNotMatch target1 =
+                (NameNotMatch) PojoUtils.realize(PojoUtils.generalize(origin), NameNotMatch.class, NameNotMatch.class);
+        Assertions.assertEquals(origin, target1);
+
+        Map<String, String> map = new HashMap<>();
+        map.put("nameA", "test123");
+        map.put("nameB", "test234");
+
+        NameNotMatch target2 = (NameNotMatch) PojoUtils.realize(map, NameNotMatch.class, NameNotMatch.class);
+        Assertions.assertEquals(origin, target2);
+    }
+
+    class NameNotMatch implements Serializable {
+        private String NameA;
+        private String NameAbsent;
+
+        public void setNameA(String nameA) {
+            this.NameA = nameA;
+        }
+
+        public String getNameA() {
+            return NameA;
+        }
+
+        public void setNameB(String nameB) {
+            this.NameAbsent = nameB;
+        }
+
+        public String getNameB() {
+            return NameAbsent;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            NameNotMatch that = (NameNotMatch) o;
+            return Objects.equals(NameA, that.NameA) && Objects.equals(NameAbsent, that.NameAbsent);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(NameA, NameAbsent);
+        }
+    }
+
+    public enum Day {
+        SUNDAY,
+        MONDAY,
+        TUESDAY,
+        WEDNESDAY,
+        THURSDAY,
+        FRIDAY,
+        SATURDAY
+    }
+
+    public static class BasicTestData implements Serializable {
+
+        public boolean a;
+        public char b;
+        public byte c;
+        public short d;
+        public int e;
+        public long f;
+        public float g;
+        public double h;
+
+        public BasicTestData(boolean a, char b, byte c, short d, int e, long f, float g, double h) {
+            this.a = a;
+            this.b = b;
+            this.c = c;
+            this.d = d;
+            this.e = e;
+            this.f = f;
+            this.g = g;
+            this.h = h;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + (a ? 1 : 2);
+            result = prime * result + b;
+            result = prime * result + c;
+            result = prime * result + c;
+            result = prime * result + e;
+            result = (int) (prime * result + f);
+            result = (int) (prime * result + g);
+            result = (int) (prime * result + h);
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null) return false;
+            if (getClass() != obj.getClass()) return false;
+            BasicTestData other = (BasicTestData) obj;
+            if (a != other.a) {
+                return false;
+            }
+            if (b != other.b) {
+                return false;
+            }
+            if (c != other.c) {
+                return false;
+            }
+            if (e != other.e) {
+                return false;
+            }
+            if (f != other.f) {
+                return false;
+            }
+            if (g != other.g) {
+                return false;
+            }
+            if (h != other.h) {
+                return false;
+            }
+            return true;
+        }
+    }
+
+    public static class Parent implements Serializable {
         public String gender;
         public String email;
         String name;
@@ -764,7 +1189,7 @@ public class PojoUtilsTest {
         }
     }
 
-    public static class Child {
+    public static class Child implements Serializable {
         public String gender;
         public int age;
         String toy;
@@ -804,7 +1229,7 @@ public class PojoUtilsTest {
         }
     }
 
-    public static class TestData {
+    public static class TestData implements Serializable {
         private Map<String, Child> children = new HashMap<String, Child>();
         private List<Child> list = new ArrayList<Child>();
 
@@ -833,7 +1258,7 @@ public class PojoUtilsTest {
         }
     }
 
-    public static class InnerPojo<T> {
+    public static class InnerPojo<T> implements Serializable {
         private List<T> list;
 
         public List<T> getList() {
@@ -845,7 +1270,7 @@ public class PojoUtilsTest {
         }
     }
 
-    public static class ListResult<T> {
+    public static class ListResult<T> implements Serializable {
         List<T> result;
 
         public List<T> getResult() {

@@ -17,19 +17,25 @@
 package org.apache.dubbo.remoting.transport.netty;
 
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.ExecutorUtil;
 import org.apache.dubbo.common.utils.NamedThreadFactory;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.remoting.RemotingException;
-import org.apache.dubbo.remoting.Server;
+import org.apache.dubbo.remoting.RemotingServer;
 import org.apache.dubbo.remoting.transport.AbstractServer;
 import org.apache.dubbo.remoting.transport.dispatcher.ChannelHandlers;
+
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelFactory;
@@ -38,21 +44,18 @@ import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 
-import java.net.InetSocketAddress;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import static org.apache.dubbo.common.constants.CommonConstants.BACKLOG_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.IO_THREADS_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.TRANSPORT_FAILED_CLOSE;
+import static org.apache.dubbo.remoting.Constants.EVENT_LOOP_BOSS_POOL_NAME;
+import static org.apache.dubbo.remoting.Constants.EVENT_LOOP_WORKER_POOL_NAME;
 
 /**
  * NettyServer
  */
-public class NettyServer extends AbstractServer implements Server {
+public class NettyServer extends AbstractServer implements RemotingServer {
 
-    private static final Logger logger = LoggerFactory.getLogger(NettyServer.class);
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(NettyServer.class);
 
     private Map<String, Channel> channels; // <ip:port, channel>
 
@@ -61,15 +64,17 @@ public class NettyServer extends AbstractServer implements Server {
     private org.jboss.netty.channel.Channel channel;
 
     public NettyServer(URL url, ChannelHandler handler) throws RemotingException {
-        super(url, ChannelHandlers.wrap(handler, ExecutorUtil.setThreadName(url, SERVER_THREAD_POOL_NAME)));
+        super(url, ChannelHandlers.wrap(handler, url));
     }
 
     @Override
     protected void doOpen() throws Throwable {
         NettyHelper.setNettyLoggerFactory();
-        ExecutorService boss = Executors.newCachedThreadPool(new NamedThreadFactory("NettyServerBoss", true));
-        ExecutorService worker = Executors.newCachedThreadPool(new NamedThreadFactory("NettyServerWorker", true));
-        ChannelFactory channelFactory = new NioServerSocketChannelFactory(boss, worker, getUrl().getPositiveParameter(IO_THREADS_KEY, Constants.DEFAULT_IO_THREADS));
+        ExecutorService boss = Executors.newCachedThreadPool(new NamedThreadFactory(EVENT_LOOP_BOSS_POOL_NAME, true));
+        ExecutorService worker =
+                Executors.newCachedThreadPool(new NamedThreadFactory(EVENT_LOOP_WORKER_POOL_NAME, true));
+        ChannelFactory channelFactory = new NioServerSocketChannelFactory(
+                boss, worker, getUrl().getPositiveParameter(IO_THREADS_KEY, Constants.DEFAULT_IO_THREADS));
         bootstrap = new ServerBootstrap(channelFactory);
 
         final NettyHandler nettyHandler = new NettyHandler(getUrl(), this);
@@ -78,6 +83,7 @@ public class NettyServer extends AbstractServer implements Server {
         // https://issues.jboss.org/browse/NETTY-379
         // final Timer timer = new HashedWheelTimer(new NamedThreadFactory("NettyIdleTimer", true));
         bootstrap.setOption("child.tcpNoDelay", true);
+        bootstrap.setOption("backlog", getUrl().getPositiveParameter(BACKLOG_KEY, Constants.DEFAULT_BACKLOG));
         bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
             @Override
             public ChannelPipeline getPipeline() {
@@ -105,7 +111,7 @@ public class NettyServer extends AbstractServer implements Server {
                 channel.close();
             }
         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
         }
         try {
             Collection<org.apache.dubbo.remoting.Channel> channels = getChannels();
@@ -114,12 +120,12 @@ public class NettyServer extends AbstractServer implements Server {
                     try {
                         channel.close();
                     } catch (Throwable e) {
-                        logger.warn(e.getMessage(), e);
+                        logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
                     }
                 }
             }
         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
         }
         try {
             if (bootstrap != null) {
@@ -127,27 +133,27 @@ public class NettyServer extends AbstractServer implements Server {
                 bootstrap.releaseExternalResources();
             }
         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
         }
         try {
             if (channels != null) {
                 channels.clear();
             }
         } catch (Throwable e) {
-            logger.warn(e.getMessage(), e);
+            logger.warn(TRANSPORT_FAILED_CLOSE, "", "", e.getMessage(), e);
         }
     }
 
     @Override
+    protected int getChannelsSize() {
+        return channels.size();
+    }
+
+    @Override
     public Collection<Channel> getChannels() {
-        Collection<Channel> chs = new HashSet<Channel>();
-        for (Channel channel : this.channels.values()) {
-            if (channel.isConnected()) {
-                chs.add(channel);
-            } else {
-                channels.remove(NetUtils.toAddressString(channel.getRemoteAddress()));
-            }
-        }
+        Collection<Channel> chs = new ArrayList<>(this.channels.size());
+        // pick channels from NettyServerHandler ( needless to check connectivity )
+        chs.addAll(this.channels.values());
         return chs;
     }
 
@@ -160,5 +166,4 @@ public class NettyServer extends AbstractServer implements Server {
     public boolean isBound() {
         return channel.isBound();
     }
-
 }

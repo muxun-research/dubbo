@@ -16,6 +16,7 @@
  */
 package org.apache.dubbo.rpc;
 
+import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.threadlocal.InternalThreadLocal;
 import org.apache.dubbo.rpc.protocol.dubbo.FutureAdapter;
 
@@ -30,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class FutureContext {
 
-    private static InternalThreadLocal<FutureContext> futureTL = new InternalThreadLocal<FutureContext>() {
+    private static final InternalThreadLocal<FutureContext> futureTL = new InternalThreadLocal<FutureContext>() {
         @Override
         protected FutureContext initialValue() {
             return new FutureContext();
@@ -45,6 +46,12 @@ public class FutureContext {
     private CompletableFuture<?> compatibleFuture;
 
     /**
+     * Whether clear future once get
+     */
+    private static final boolean clearFutureAfterGet =
+            Boolean.parseBoolean(System.getProperty(CommonConstants.CLEAR_FUTURE_AFTER_GET, "false"));
+
+    /**
      * get future.
      *
      * @param <T>
@@ -52,7 +59,13 @@ public class FutureContext {
      */
     @SuppressWarnings("unchecked")
     public <T> CompletableFuture<T> getCompletableFuture() {
-        return (CompletableFuture<T>) future;
+        try {
+            return (CompletableFuture<T>) future;
+        } finally {
+            if (clearFutureAfterGet) {
+                this.future = null;
+            }
+        }
     }
 
     /**
@@ -67,7 +80,13 @@ public class FutureContext {
     @Deprecated
     @SuppressWarnings("unchecked")
     public <T> CompletableFuture<T> getCompatibleCompletableFuture() {
-        return (CompletableFuture<T>) compatibleFuture;
+        try {
+            return (CompletableFuture<T>) compatibleFuture;
+        } finally {
+            if (clearFutureAfterGet) {
+                this.compatibleFuture = null;
+            }
+        }
     }
 
     /**
@@ -90,7 +109,7 @@ public class FutureContext {
      *      public final class TracingFilter implements Filter {
      *          public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
      *              Result result = invoker.invoke(invocation);
-     *              result.whenComplete(new FinishSpanCallback(span));
+     *              result.getResponseFuture().whenComplete(new FinishSpanCallback(span));
      *              ......
      *          }
      *      }
@@ -104,5 +123,4 @@ public class FutureContext {
             this.setFuture(new FutureAdapter(compatibleFuture));
         }
     }
-
 }

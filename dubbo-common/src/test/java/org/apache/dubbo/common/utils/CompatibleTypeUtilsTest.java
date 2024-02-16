@@ -16,11 +16,10 @@
  */
 package org.apache.dubbo.common.utils;
 
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -28,16 +27,18 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class CompatibleTypeUtilsTest {
+class CompatibleTypeUtilsTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testCompatibleTypeConvert() throws Exception {
+    void testCompatibleTypeConvert() throws Exception {
         Object result;
 
         {
@@ -75,7 +76,21 @@ public class CompatibleTypeUtilsTest {
             assertEquals(new SimpleDateFormat("HH:mm:ss").format((java.sql.Time) result), "12:24:12");
 
             result = CompatibleTypeUtils.compatibleTypeConvert("2011-12-11 12:24:12", java.sql.Timestamp.class);
-            assertEquals(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format((java.sql.Timestamp) result), "2011-12-11 12:24:12");
+            assertEquals(
+                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format((java.sql.Timestamp) result),
+                    "2011-12-11 12:24:12");
+
+            result =
+                    CompatibleTypeUtils.compatibleTypeConvert("2011-12-11T12:24:12.047", java.time.LocalDateTime.class);
+            assertEquals(
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format((java.time.LocalDateTime) result),
+                    "2011-12-11 12:24:12");
+
+            result = CompatibleTypeUtils.compatibleTypeConvert("2011-12-11T12:24:12.047", java.time.LocalTime.class);
+            assertEquals(DateTimeFormatter.ofPattern("HH:mm:ss").format((java.time.LocalTime) result), "12:24:12");
+
+            result = CompatibleTypeUtils.compatibleTypeConvert("2011-12-11", java.time.LocalDate.class);
+            assertEquals(DateTimeFormatter.ofPattern("yyyy-MM-dd").format((java.time.LocalDate) result), "2011-12-11");
 
             result = CompatibleTypeUtils.compatibleTypeConvert("ab", char[].class);
             assertEquals(2, ((char[]) result).length);
@@ -144,7 +159,7 @@ public class CompatibleTypeUtilsTest {
             set.add("a");
             set.add("b");
 
-            String[] array = new String[]{"a", "b"};
+            String[] array = new String[] {"a", "b"};
 
             result = CompatibleTypeUtils.compatibleTypeConvert(array, List.class);
             assertEquals(ArrayList.class, result.getClass());
@@ -205,8 +220,6 @@ public class CompatibleTypeUtilsTest {
             assertEquals(2, ((String[]) result).length);
             assertTrue(((String[]) result)[0].equals("a"));
             assertTrue(((String[]) result)[1].equals("b"));
-
         }
-
     }
 }

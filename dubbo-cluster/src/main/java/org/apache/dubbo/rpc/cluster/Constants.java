@@ -17,21 +17,10 @@
 package org.apache.dubbo.rpc.cluster;
 
 public interface Constants {
-    String LOADBALANCE_KEY = "loadbalance";
-
-    String DEFAULT_LOADBALANCE = "random";
 
     String FAIL_BACK_TASKS_KEY = "failbacktasks";
 
     int DEFAULT_FAILBACK_TASKS = 100;
-
-    String RETRIES_KEY = "retries";
-
-    int DEFAULT_RETRIES = 2;
-
-    int DEFAULT_FAILBACK_TIMES = 3;
-
-    String FORKS_KEY = "forks";
 
     int DEFAULT_FORKS = 2;
 
@@ -42,6 +31,22 @@ public interface Constants {
     String MOCK_PROTOCOL = "mock";
 
     String FORCE_KEY = "force";
+
+    String RAW_RULE_KEY = "rawRule";
+
+    String VALID_KEY = "valid";
+
+    String ENABLED_KEY = "enabled";
+
+    String DYNAMIC_KEY = "dynamic";
+
+    String SCOPE_KEY = "scope";
+
+    String KEY_KEY = "key";
+
+    String CONDITIONS_KEY = "conditions";
+
+    String TAGS_KEY = "tags";
 
     /**
      * To decide whether to exclude unavailable invoker from the cluster
@@ -66,8 +71,6 @@ public interface Constants {
      * @see #CLUSTER_STICKY_KEY
      */
     boolean DEFAULT_CLUSTER_STICKY = false;
-
-    String ADDRESS_KEY = "address";
 
     /**
      * When this attribute appears in invocation's attachment, mock invoker will be used
@@ -97,17 +100,42 @@ public interface Constants {
 
     String OVERRIDE_PROVIDERS_KEY = "providerAddresses";
 
-    String TAG_KEY = "dubbo.tag";
     /**
      * key for router type, for e.g., "script"/"file",  corresponding to ScriptRouterFactory.NAME, FileRouterFactory.NAME
      */
     String ROUTER_KEY = "router";
+
     /**
      * The key name for reference URL in register center
      */
     String REFER_KEY = "refer";
+
+    String ATTRIBUTE_KEY = "attribute";
+
     /**
      * The key name for export URL in register center
      */
     String EXPORT_KEY = "export";
+
+    String PEER_KEY = "peer";
+
+    String CONSUMER_URL_KEY = "CONSUMER_URL";
+
+    /**
+     * prefix of arguments router key
+     */
+    String ARGUMENTS = "arguments";
+
+    String NEED_REEXPORT = "need-reexport";
+
+    /**
+     * The key of shortestResponseSlidePeriod
+     */
+    String SHORTEST_RESPONSE_SLIDE_PERIOD = "shortestResponseSlidePeriod";
+
+    String SHOULD_FAIL_FAST_KEY = "dubbo.router.should-fail-fast";
+
+    String RULE_VERSION_V27 = "v2.7";
+
+    String RULE_VERSION_V30 = "v3.0";
 }

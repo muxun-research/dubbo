@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.serialize;
 
 public interface Constants {
@@ -30,4 +29,9 @@ public interface Constants {
     byte AVRO_SERIALIZATION_ID = 11;
     byte GSON_SERIALIZATION_ID = 16;
     byte PROTOBUF_JSON_SERIALIZATION_ID = 21;
+
+    byte PROTOBUF_SERIALIZATION_ID = 22;
+    byte FASTJSON2_SERIALIZATION_ID = 23;
+    byte KRYO_SERIALIZATION2_ID = 25;
+    byte CUSTOM_MESSAGE_PACK_ID = 31;
 }

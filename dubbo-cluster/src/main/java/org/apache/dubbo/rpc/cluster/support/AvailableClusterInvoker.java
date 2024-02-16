@@ -26,7 +26,7 @@ import org.apache.dubbo.rpc.cluster.LoadBalance;
 import java.util.List;
 
 /**
- * AvailableCluster
+ * AvailableClusterInvoker
  *
  */
 public class AvailableClusterInvoker<T> extends AbstractClusterInvoker<T> {
@@ -40,10 +40,9 @@ public class AvailableClusterInvoker<T> extends AbstractClusterInvoker<T> {
 		// 循环候选的invoker列表，不考虑负载均衡
         for (Invoker<T> invoker : invokers) {
             if (invoker.isAvailable()) {
-                return invoker.invoke(invocation);
+                return invokeWithContext(invoker, invocation);
             }
         }
         throw new RpcException("No provider available in " + invokers);
     }
-
 }

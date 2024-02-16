@@ -20,24 +20,26 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.monitor.Monitor;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.ProxyFactory;
+import org.apache.dubbo.rpc.model.FrameworkModel;
 import org.apache.dubbo.rpc.protocol.dubbo.DubboProtocol;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
+import static org.apache.dubbo.common.constants.CommonConstants.REFERENCE_FILTER_KEY;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.Matchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.MockitoAnnotations.initMocks;
 
-import static org.apache.dubbo.rpc.Constants.REFERENCE_FILTER_KEY;
-
-public class DubboMonitorFactoryTest {
+class DubboMonitorFactoryTest {
     private DubboMonitorFactory dubboMonitorFactory;
+
     @Mock
     private ProxyFactory proxyFactory;
 
@@ -45,12 +47,12 @@ public class DubboMonitorFactoryTest {
     public void setUp() throws Exception {
         initMocks(this);
         this.dubboMonitorFactory = new DubboMonitorFactory();
-        this.dubboMonitorFactory.setProtocol(new DubboProtocol());
+        this.dubboMonitorFactory.setProtocol(new DubboProtocol(FrameworkModel.defaultModel()));
         this.dubboMonitorFactory.setProxyFactory(proxyFactory);
     }
 
     @Test
-    public void testCreateMonitor() {
+    void testCreateMonitor() {
         URL urlWithoutPath = URL.valueOf("http://10.10.10.11");
         Monitor monitor = dubboMonitorFactory.createMonitor(urlWithoutPath);
         assertThat(monitor, not(nullValue()));

@@ -16,7 +16,9 @@
  */
 package org.apache.dubbo.rpc.protocol.dubbo;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.config.Configuration;
+import org.apache.dubbo.common.config.ConfigurationUtils;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.serialize.Cleanable;
 import org.apache.dubbo.common.serialize.ObjectInput;
@@ -25,6 +27,7 @@ import org.apache.dubbo.common.utils.Assert;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.Codec;
+import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.remoting.Decodeable;
 import org.apache.dubbo.remoting.exchange.Response;
 import org.apache.dubbo.remoting.transport.CodecSupport;
@@ -36,21 +39,24 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
-import java.util.Map;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROTOCOL_FAILED_DECODE;
+import static org.apache.dubbo.rpc.Constants.SERIALIZATION_ID_KEY;
+import static org.apache.dubbo.rpc.Constants.SERIALIZATION_SECURITY_CHECK_KEY;
 
 public class DecodeableRpcResult extends AppResponse implements Codec, Decodeable {
 
-    private static final Logger log = LoggerFactory.getLogger(DecodeableRpcResult.class);
+    private static final ErrorTypeAwareLogger log = LoggerFactory.getErrorTypeAwareLogger(DecodeableRpcResult.class);
 
-    private Channel channel;
+    private final Channel channel;
 
-    private byte serializationType;
+    private final byte serializationType;
 
-    private InputStream inputStream;
+    private final InputStream inputStream;
 
-    private Response response;
+    private final Response response;
 
-    private Invocation invocation;
+    private final Invocation invocation;
 
     private volatile boolean hasDecoded;
 
@@ -72,8 +78,20 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     @Override
     public Object decode(Channel channel, InputStream input) throws IOException {
-        ObjectInput in = CodecSupport.getSerialization(channel.getUrl(), serializationType)
-                .deserialize(channel.getUrl(), input);
+        if (log.isDebugEnabled()) {
+            Thread thread = Thread.currentThread();
+            log.debug("Decoding in thread -- [" + thread.getName() + "#" + thread.getId() + "]");
+        }
+
+        int contentLength = input.available();
+        setAttribute(Constants.CONTENT_LENGTH_KEY, contentLength);
+
+        // switch TCCL
+        if (invocation != null && invocation.getServiceModel() != null) {
+            Thread.currentThread()
+                    .setContextClassLoader(invocation.getServiceModel().getClassLoader());
+        }
+        ObjectInput in = CodecSupport.getSerialization(serializationType).deserialize(channel.getUrl(), input);
 
         byte flag = in.readByte();
         switch (flag) {
@@ -109,10 +127,33 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
     public void decode() throws Exception {
         if (!hasDecoded && channel != null && inputStream != null) {
             try {
+                if (invocation != null) {
+                    Configuration systemConfiguration = null;
+                    try {
+                        systemConfiguration = ConfigurationUtils.getSystemConfiguration(
+                                channel.getUrl().getScopeModel());
+                    } catch (Exception e) {
+                        // Because the Environment may be destroyed during the offline process, the configuration cannot
+                        // be obtained.
+                        // Exceptions are ignored here, and normal decoding is guaranteed.
+                    }
+
+                    if (systemConfiguration == null
+                            || systemConfiguration.getBoolean(SERIALIZATION_SECURITY_CHECK_KEY, true)) {
+                        Object serializationTypeObj = invocation.get(SERIALIZATION_ID_KEY);
+                        if (serializationTypeObj != null) {
+                            if ((byte) serializationTypeObj != serializationType) {
+                                throw new IOException("Unexpected serialization id:" + serializationType
+                                        + " received from network, please check if the peer send the right id.");
+                            }
+                        }
+                    }
+                }
+
                 decode(channel, inputStream);
             } catch (Throwable e) {
                 if (log.isWarnEnabled()) {
-                    log.warn("Decode rpc result failed: " + e.getMessage(), e);
+                    log.warn(PROTOCOL_FAILED_DECODE, "", "", "Decode rpc result failed: " + e.getMessage(), e);
                 }
                 response.setStatus(Response.CLIENT_ERROR);
                 response.setErrorMessage(StringUtils.toString(e));
@@ -125,8 +166,9 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
     private void handleValue(ObjectInput in) throws IOException {
         try {
             Type[] returnTypes = RpcUtils.getReturnTypes(invocation);
-            Object value = null;
+            Object value;
             if (ArrayUtils.isEmpty(returnTypes)) {
+                // happens when generic invoke or void return
                 value = in.readObject();
             } else if (returnTypes.length == 1) {
                 value = in.readObject((Class<?>) returnTypes[0]);
@@ -141,11 +183,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     private void handleException(ObjectInput in) throws IOException {
         try {
-            Object obj = in.readObject();
-            if (!(obj instanceof Throwable)) {
-                throw new IOException("Response data error, expect Throwable, but get " + obj);
-            }
-            setException((Throwable) obj);
+            setException(in.readThrowable());
         } catch (ClassNotFoundException e) {
             rethrow(e);
         }
@@ -153,7 +191,7 @@ public class DecodeableRpcResult extends AppResponse implements Codec, Decodeabl
 
     private void handleAttachment(ObjectInput in) throws IOException {
         try {
-            setAttachments((Map<String, String>) in.readObject(Map.class));
+            addObjectAttachments(in.readAttachments());
         } catch (ClassNotFoundException e) {
             rethrow(e);
         }

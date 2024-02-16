@@ -20,17 +20,27 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.threadpool.ThreadPool;
 import org.apache.dubbo.common.threadpool.support.AbortPolicyWithReport;
+import org.apache.dubbo.common.url.component.ServiceConfigURL;
 import org.apache.dubbo.common.utils.NamedThreadFactory;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
+import static org.awaitility.Awaitility.await;
 
-public class EagerThreadPoolExecutorTest {
+class EagerThreadPoolExecutorTest {
 
-    private static final URL URL = new URL("dubbo", "localhost", 8080);
+    private static final URL URL = new ServiceConfigURL("dubbo", "localhost", 8080);
 
     /**
      * It print like this:
@@ -53,8 +63,9 @@ public class EagerThreadPoolExecutorTest {
      * We can see , when the core threads are in busy,
      * the thread pool create thread (but thread nums always less than max) instead of put task into queue.
      */
+    @Disabled("replaced to testEagerThreadPoolFast for performance")
     @Test
-    public void testEagerThreadPool() throws Exception {
+    void testEagerThreadPool() throws Exception {
         String name = "eager-tf";
         int queues = 5;
         int cores = 5;
@@ -62,9 +73,10 @@ public class EagerThreadPoolExecutorTest {
         // alive 1 second
         long alive = 1000;
 
-        //init queue and executor
+        // init queue and executor
         TaskQueue<Runnable> taskQueue = new TaskQueue<Runnable>(queues);
-        final EagerThreadPoolExecutor executor = new EagerThreadPoolExecutor(cores,
+        final EagerThreadPoolExecutor executor = new EagerThreadPoolExecutor(
+                cores,
                 threads,
                 alive,
                 TimeUnit.MILLISECONDS,
@@ -75,16 +87,14 @@ public class EagerThreadPoolExecutorTest {
 
         for (int i = 0; i < 15; i++) {
             Thread.sleep(50);
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    System.out.println("thread number in current pool：" + executor.getPoolSize() + ",  task number in task queue：" + executor.getQueue()
-                            .size() + " executor size: " + executor.getPoolSize());
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+            executor.execute(() -> {
+                System.out.println(
+                        "thread number in current pool：" + executor.getPoolSize() + ",  task number in task queue："
+                                + executor.getQueue().size() + " executor size: " + executor.getPoolSize());
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             });
         }
@@ -94,11 +104,174 @@ public class EagerThreadPoolExecutorTest {
     }
 
     @Test
-    public void testSPI() {
-        ExecutorService executorService = (ExecutorService) ExtensionLoader.getExtensionLoader(ThreadPool.class)
-                .getExtension("eager")
-                .getExecutor(URL);
-        Assertions.assertEquals("EagerThreadPoolExecutor", executorService.getClass()
-            .getSimpleName(), "test spi fail!");
+    void testEagerThreadPoolFast() {
+        String name = "eager-tf";
+        int queues = 5;
+        int cores = 5;
+        int threads = 10;
+        // alive 1 second
+        long alive = 1000;
+
+        // init queue and executor
+        TaskQueue<Runnable> taskQueue = new TaskQueue<>(queues);
+        final EagerThreadPoolExecutor executor = new EagerThreadPoolExecutor(
+                cores,
+                threads,
+                alive,
+                TimeUnit.MILLISECONDS,
+                taskQueue,
+                new NamedThreadFactory(name, true),
+                new AbortPolicyWithReport(name, URL));
+        taskQueue.setExecutor(executor);
+
+        CountDownLatch countDownLatch1 = new CountDownLatch(1);
+        for (int i = 0; i < 10; i++) {
+            executor.execute(() -> {
+                try {
+                    countDownLatch1.await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+        await().until(() -> executor.getPoolSize() == 10);
+        Assertions.assertEquals(10, executor.getActiveCount());
+
+        CountDownLatch countDownLatch2 = new CountDownLatch(1);
+        AtomicBoolean started = new AtomicBoolean(false);
+        for (int i = 0; i < 5; i++) {
+            executor.execute(() -> {
+                started.set(true);
+                try {
+                    countDownLatch2.await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+
+        await().until(() -> executor.getQueue().size() == 5);
+        Assertions.assertEquals(10, executor.getActiveCount());
+        Assertions.assertEquals(10, executor.getPoolSize());
+        Assertions.assertFalse(started.get());
+        countDownLatch1.countDown();
+
+        await().until(() -> executor.getActiveCount() == 5);
+        Assertions.assertTrue(started.get());
+
+        countDownLatch2.countDown();
+        await().until(() -> executor.getActiveCount() == 0);
+
+        await().until(() -> executor.getPoolSize() == cores);
+    }
+
+    @Test
+    void testSPI() {
+        ExtensionLoader<ThreadPool> extensionLoader =
+                ApplicationModel.defaultModel().getDefaultModule().getExtensionLoader(ThreadPool.class);
+
+        ExecutorService executorService =
+                (ExecutorService) extensionLoader.getExtension("eager").getExecutor(URL);
+
+        Assertions.assertEquals(
+                "EagerThreadPoolExecutor", executorService.getClass().getSimpleName(), "test spi fail!");
+    }
+
+    @Test
+    void testEagerThreadPool_rejectExecution1() {
+        String name = "eager-tf";
+        int cores = 1;
+        int threads = 3;
+        int queues = 2;
+        long alive = 1000;
+
+        // init queue and executor
+        TaskQueue<Runnable> taskQueue = new TaskQueue<>(queues);
+        final EagerThreadPoolExecutor executor = new EagerThreadPoolExecutor(
+                cores,
+                threads,
+                alive,
+                TimeUnit.MILLISECONDS,
+                taskQueue,
+                new NamedThreadFactory(name, true),
+                new AbortPolicyWithReport(name, URL));
+        taskQueue.setExecutor(executor);
+
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+        Runnable runnable = () -> {
+            try {
+                countDownLatch.await();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        };
+        for (int i = 0; i < 5; i++) {
+            executor.execute(runnable);
+        }
+
+        await().until(() -> executor.getPoolSize() == threads);
+        await().until(() -> executor.getQueue().size() == queues);
+
+        Assertions.assertThrows(RejectedExecutionException.class, () -> executor.execute(runnable));
+
+        countDownLatch.countDown();
+        await().until(() -> executor.getActiveCount() == 0);
+
+        executor.execute(runnable);
+    }
+
+    @Test
+    void testEagerThreadPool_rejectExecution2() {
+        String name = "eager-tf";
+        int cores = 1;
+        int threads = 3;
+        int queues = 2;
+        long alive = 1000;
+
+        // init queue and executor
+        AtomicReference<Runnable> runnableWhenRetryOffer = new AtomicReference<>();
+        TaskQueue<Runnable> taskQueue = new TaskQueue<Runnable>(queues) {
+            @Override
+            public boolean retryOffer(Runnable o, long timeout, TimeUnit unit) throws InterruptedException {
+                if (runnableWhenRetryOffer.get() != null) {
+                    runnableWhenRetryOffer.get().run();
+                }
+                return super.retryOffer(o, timeout, unit);
+            }
+        };
+        final EagerThreadPoolExecutor executor = new EagerThreadPoolExecutor(
+                cores,
+                threads,
+                alive,
+                TimeUnit.MILLISECONDS,
+                taskQueue,
+                new NamedThreadFactory(name, true),
+                new AbortPolicyWithReport(name, URL));
+        taskQueue.setExecutor(executor);
+
+        Semaphore semaphore = new Semaphore(0);
+        Runnable runnable = () -> {
+            try {
+                semaphore.acquire();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        };
+        for (int i = 0; i < 5; i++) {
+            executor.execute(runnable);
+        }
+
+        await().until(() -> executor.getPoolSize() == threads);
+        await().until(() -> executor.getQueue().size() == queues);
+
+        Assertions.assertThrows(RejectedExecutionException.class, () -> executor.execute(runnable));
+
+        runnableWhenRetryOffer.set(() -> {
+            semaphore.release();
+            await().until(() -> executor.getCompletedTaskCount() == 1);
+        });
+        executor.execute(runnable);
+        semaphore.release(5);
+        await().until(() -> executor.getActiveCount() == 0);
     }
 }

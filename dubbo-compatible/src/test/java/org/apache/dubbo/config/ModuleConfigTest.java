@@ -14,50 +14,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.config;
-
-import com.alibaba.dubbo.config.ModuleConfig;
-import com.alibaba.dubbo.config.RegistryConfig;
-
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.alibaba.dubbo.config.ModuleConfig;
+import com.alibaba.dubbo.config.MonitorConfig;
+import com.alibaba.dubbo.config.RegistryConfig;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
-import static org.hamcrest.MatcherAssert.assertThat;
 
-public class ModuleConfigTest {
-    @Test
-    public void testName1() throws Exception {
-        Assertions.assertThrows(IllegalStateException.class, () -> {
-            ModuleConfig module = new ModuleConfig();
-            Map<String, String> parameters = new HashMap<String, String>();
-            ModuleConfig.appendParameters(parameters, module);
-        });
-    }
+class ModuleConfigTest {
 
     @Test
-    public void testName2() throws Exception {
+    void testName2() throws Exception {
         ModuleConfig module = new ModuleConfig();
         module.setName("module-name");
         assertThat(module.getName(), equalTo("module-name"));
-        assertThat(module.getId(), equalTo("module-name"));
+        assertThat(module.getId(), equalTo(null));
         Map<String, String> parameters = new HashMap<String, String>();
         ModuleConfig.appendParameters(parameters, module);
         assertThat(parameters, hasEntry("module", "module-name"));
     }
 
     @Test
-    public void testVersion() throws Exception {
+    void testVersion() throws Exception {
         ModuleConfig module = new ModuleConfig();
         module.setName("module-name");
         module.setVersion("1.0.0");
@@ -68,21 +58,21 @@ public class ModuleConfigTest {
     }
 
     @Test
-    public void testOwner() throws Exception {
+    void testOwner() throws Exception {
         ModuleConfig module = new ModuleConfig();
         module.setOwner("owner");
         assertThat(module.getOwner(), equalTo("owner"));
     }
 
     @Test
-    public void testOrganization() throws Exception {
+    void testOrganization() throws Exception {
         ModuleConfig module = new ModuleConfig();
         module.setOrganization("org");
         assertThat(module.getOrganization(), equalTo("org"));
     }
 
     @Test
-    public void testRegistry() throws Exception {
+    void testRegistry() throws Exception {
         ModuleConfig module = new ModuleConfig();
         RegistryConfig registry = new RegistryConfig();
         module.setRegistry(registry);
@@ -90,7 +80,7 @@ public class ModuleConfigTest {
     }
 
     @Test
-    public void testRegistries() throws Exception {
+    void testRegistries() throws Exception {
         ModuleConfig module = new ModuleConfig();
         RegistryConfig registry = new RegistryConfig();
         module.setRegistries(Collections.singletonList(registry));
@@ -99,7 +89,7 @@ public class ModuleConfigTest {
     }
 
     @Test
-    public void testMonitor() throws Exception {
+    void testMonitor() throws Exception {
         ModuleConfig module = new ModuleConfig();
         module.setMonitor("monitor-addr1");
         assertThat(module.getMonitor().getAddress(), equalTo("monitor-addr1"));
@@ -108,7 +98,7 @@ public class ModuleConfigTest {
     }
 
     @Test
-    public void testDefault() throws Exception {
+    void testDefault() throws Exception {
         ModuleConfig module = new ModuleConfig();
         module.setDefault(true);
         assertThat(module.isDefault(), is(true));

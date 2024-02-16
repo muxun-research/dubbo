@@ -21,6 +21,7 @@ import org.apache.dubbo.rpc.AppResponse;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
+import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.support.BlockMyInvoker;
 
 import org.junit.jupiter.api.Assertions;
@@ -30,17 +31,19 @@ import org.mockito.Mockito;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
-public class TimeoutFilterTest {
+class TimeoutFilterTest {
 
     private TimeoutFilter timeoutFilter = new TimeoutFilter();
 
     @Test
-    public void testInvokeWithoutTimeout() throws Exception {
+    void testInvokeWithoutTimeout() {
         int timeout = 3000;
 
         Invoker invoker = Mockito.mock(Invoker.class);
         when(invoker.invoke(any(Invocation.class))).thenReturn(new AppResponse("result"));
-        when(invoker.getUrl()).thenReturn(URL.valueOf("test://test:11/test?accesslog=true&group=dubbo&version=1.1&timeout=" + timeout));
+        when(invoker.getUrl())
+                .thenReturn(
+                        URL.valueOf("test://test:11/test?accesslog=true&group=dubbo&version=1.1&timeout=" + timeout));
 
         Invocation invocation = Mockito.mock(Invocation.class);
         when(invocation.getMethodName()).thenReturn("testInvokeWithoutTimeout");
@@ -50,17 +53,16 @@ public class TimeoutFilterTest {
     }
 
     @Test
-    public void testInvokeWithTimeout() throws Exception {
+    void testInvokeWithTimeout() {
         int timeout = 100;
 
         URL url = URL.valueOf("test://test:11/test?accesslog=true&group=dubbo&version=1.1&timeout=" + timeout);
         Invoker invoker = new BlockMyInvoker(url, (timeout + 100));
 
-        Invocation invocation = Mockito.mock(Invocation.class);
+        Invocation invocation = Mockito.mock(RpcInvocation.class);
         when(invocation.getMethodName()).thenReturn("testInvokeWithTimeout");
 
         Result result = timeoutFilter.invoke(invoker, invocation);
         Assertions.assertEquals("Dubbo", result.getValue());
-
     }
 }

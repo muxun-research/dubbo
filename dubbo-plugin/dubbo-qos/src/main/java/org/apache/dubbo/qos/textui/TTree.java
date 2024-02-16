@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Scanner;
 
 import static java.lang.System.currentTimeMillis;
-import static org.apache.dubbo.common.utils.StringUtils.EMPTY;
+import static org.apache.dubbo.common.utils.StringUtils.EMPTY_STRING;
 import static org.apache.dubbo.common.utils.StringUtils.length;
 import static org.apache.dubbo.common.utils.StringUtils.repeat;
 
@@ -45,13 +45,11 @@ public class TTree implements TComponent {
     // current node
     private Node current;
 
-
     public TTree(boolean isPrintCost, String title) {
         this.root = new Node(title).markBegin().markEnd();
         this.current = root;
         this.isPrintCost = isPrintCost;
     }
-
 
     @Override
     public String rendering() {
@@ -69,11 +67,12 @@ public class TTree implements TComponent {
 
                 int costPrefixLength = 0;
                 if (hasChild) {
-                    treeSB.append("+");
+                    treeSB.append('+');
                 }
-                if (isPrintCost
-                        && !node.isRoot()) {
-                    final String costPrefix = String.format("[%s,%sms]", (node.endTimestamp - root.beginTimestamp), (node.endTimestamp - node.beginTimestamp));
+                if (isPrintCost && !node.isRoot()) {
+                    final String costPrefix = String.format(
+                            "[%s,%sms]",
+                            (node.endTimestamp - root.beginTimestamp), (node.endTimestamp - node.beginTimestamp));
                     costPrefixLength = length(costPrefix);
                     treeSB.append(costPrefix);
                 }
@@ -82,21 +81,19 @@ public class TTree implements TComponent {
                     boolean isFirst = true;
                     while (scanner.hasNextLine()) {
                         if (isFirst) {
-                            treeSB.append(scanner.nextLine()).append("\n");
+                            treeSB.append(scanner.nextLine()).append('\n');
                             isFirst = false;
                         } else {
                             treeSB.append(prefix)
                                     .append(repeat(' ', stepStringLength))
-                                    .append(hasChild ? "|" : EMPTY)
+                                    .append(hasChild ? "|" : EMPTY_STRING)
                                     .append(repeat(' ', costPrefixLength))
                                     .append(scanner.nextLine())
                                     .append(System.lineSeparator());
                         }
                     }
                 }
-
             }
-
         });
 
         return treeSB.toString();
@@ -112,13 +109,7 @@ public class TTree implements TComponent {
             for (int index = 0; index < size; index++) {
                 final boolean isLastFlag = index == size - 1;
                 final String currentPrefix = isLast ? prefix + STEP_EMPTY_BOARD : prefix + STEP_HAS_BOARD;
-                recursive(
-                        deep + 1,
-                        isLastFlag,
-                        currentPrefix,
-                        node.children.get(index),
-                        callback
-                );
+                recursive(deep + 1, isLastFlag, currentPrefix, node.children.get(index), callback);
             }
         }
     }
@@ -171,7 +162,6 @@ public class TTree implements TComponent {
         current = current.parent;
         return this;
     }
-
 
     /**
      * tree node
@@ -250,9 +240,7 @@ public class TTree implements TComponent {
             endTimestamp = currentTimeMillis();
             return this;
         }
-
     }
-
 
     /**
      * callback interface for recursive visit
@@ -260,7 +248,5 @@ public class TTree implements TComponent {
     private interface Callback {
 
         void callback(int deep, boolean isLast, String prefix, Node node);
-
     }
-
 }

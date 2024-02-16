@@ -16,13 +16,13 @@
  */
 package org.apache.dubbo.remoting;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.serialize.support.DefaultSerializationSelector;
 import org.apache.dubbo.remoting.exchange.ExchangeClient;
 import org.apache.dubbo.remoting.exchange.Exchangers;
 import org.apache.dubbo.remoting.exchange.support.ExchangeHandlerAdapter;
-
-import org.junit.jupiter.api.Test;
+import org.apache.dubbo.rpc.model.FrameworkModel;
 
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
@@ -32,8 +32,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.junit.jupiter.api.Test;
+
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_TIMEOUT;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_UNDEFINED_ARGUMENT;
 import static org.apache.dubbo.remoting.Constants.CONNECTIONS_KEY;
 
 /**
@@ -41,21 +44,24 @@ import static org.apache.dubbo.remoting.Constants.CONNECTIONS_KEY;
  * <p>
  * mvn clean test -Dtest=*PerformanceClientTest -Dserver=10.20.153.187:9911
  */
-public class PerformanceClientTest  {
+class PerformanceClientTest {
 
-    private static final Logger logger = LoggerFactory.getLogger(PerformanceClientTest.class);
+    private static final ErrorTypeAwareLogger logger =
+            LoggerFactory.getErrorTypeAwareLogger(PerformanceClientTest.class);
 
     @Test
     @SuppressWarnings("unchecked")
     public void testClient() throws Throwable {
         // read server info from property
         if (PerformanceUtils.getProperty("server", null) == null) {
-            logger.warn("Please set -Dserver=127.0.0.1:9911");
+            logger.warn(CONFIG_UNDEFINED_ARGUMENT, "", "", "Please set -Dserver=127.0.0.1:9911");
             return;
         }
         final String server = System.getProperty("server", "127.0.0.1:9911");
-        final String transporter = PerformanceUtils.getProperty(Constants.TRANSPORTER_KEY, Constants.DEFAULT_TRANSPORTER);
-        final String serialization = PerformanceUtils.getProperty(Constants.SERIALIZATION_KEY, Constants.DEFAULT_REMOTING_SERIALIZATION);
+        final String transporter =
+                PerformanceUtils.getProperty(Constants.TRANSPORTER_KEY, Constants.DEFAULT_TRANSPORTER);
+        final String serialization = PerformanceUtils.getProperty(
+                Constants.SERIALIZATION_KEY, DefaultSerializationSelector.getDefaultRemotingSerialization());
         final int timeout = PerformanceUtils.getIntProperty(TIMEOUT_KEY, DEFAULT_TIMEOUT);
         final int length = PerformanceUtils.getIntProperty("length", 1024);
         final int connections = PerformanceUtils.getIntProperty(CONNECTIONS_KEY, 1);
@@ -64,21 +70,24 @@ public class PerformanceClientTest  {
         final int runs = r > 0 ? r : Integer.MAX_VALUE;
         final String onerror = PerformanceUtils.getProperty("onerror", "continue");
 
-        final String url = "exchange://" + server + "?transporter=" + transporter + "&serialization=" + serialization + "&timeout=" + timeout;
+        final String url = "exchange://" + server + "?transporter=" + transporter + "&serialization=" + serialization
+                + "&timeout=" + timeout;
         // Create clients and build connections
         final ExchangeClient[] exchangeClients = new ExchangeClient[connections];
         for (int i = 0; i < connections; i++) {
-            //exchangeClients[i] = Exchangers.connect(url,handler);
+            // exchangeClients[i] = Exchangers.connect(url,handler);
             exchangeClients[i] = Exchangers.connect(url);
         }
 
-        List<String> serverEnvironment = (List<String>) exchangeClients[0].request("environment").get();
-        List<String> serverScene = (List<String>) exchangeClients[0].request("scene").get();
+        List<String> serverEnvironment =
+                (List<String>) exchangeClients[0].request("environment").get();
+        List<String> serverScene =
+                (List<String>) exchangeClients[0].request("scene").get();
 
         // Create some data for test
         StringBuilder buf = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
-            buf.append("A");
+            buf.append('A');
         }
         final String data = buf.toString();
 
@@ -92,67 +101,71 @@ public class PerformanceClientTest  {
         final CountDownLatch latch = new CountDownLatch(concurrent);
         for (int i = 0; i < concurrent; i++) {
             new Thread(new Runnable() {
-                public void run() {
-                    try {
-                        AtomicInteger index = new AtomicInteger();
-                        long init = System.currentTimeMillis();
-                        for (int i = 0; i < runs; i++) {
+                        public void run() {
                             try {
-                                count.incrementAndGet();
-                                ExchangeClient client = exchangeClients[index.getAndIncrement() % connections];
-                                long start = System.currentTimeMillis();
-                                String result = (String) client.request(data).get();
-                                long end = System.currentTimeMillis();
-                                if (!data.equals(result)) {
-                                    throw new IllegalStateException("Invalid result " + result);
-                                }
-                                time.addAndGet(end - start);
-                            } catch (Exception e) {
-                                error.incrementAndGet();
-                                e.printStackTrace();
-                                if ("exit".equals(onerror)) {
-                                    System.exit(-1);
-                                } else if ("break".equals(onerror)) {
-                                    break;
-                                } else if ("sleep".equals(onerror)) {
+                                AtomicInteger index = new AtomicInteger();
+                                long init = System.currentTimeMillis();
+                                for (int i = 0; i < runs; i++) {
                                     try {
-                                        Thread.sleep(30000);
-                                    } catch (InterruptedException e1) {
+                                        count.incrementAndGet();
+                                        ExchangeClient client = exchangeClients[index.getAndIncrement() % connections];
+                                        long start = System.currentTimeMillis();
+                                        String result =
+                                                (String) client.request(data).get();
+                                        long end = System.currentTimeMillis();
+                                        if (!data.equals(result)) {
+                                            throw new IllegalStateException("Invalid result " + result);
+                                        }
+                                        time.addAndGet(end - start);
+                                    } catch (Exception e) {
+                                        error.incrementAndGet();
+                                        e.printStackTrace();
+                                        if ("exit".equals(onerror)) {
+                                            System.exit(-1);
+                                        } else if ("break".equals(onerror)) {
+                                            break;
+                                        } else if ("sleep".equals(onerror)) {
+                                            try {
+                                                Thread.sleep(30000);
+                                            } catch (InterruptedException e1) {
+                                            }
+                                        }
                                     }
                                 }
+                                all.addAndGet(System.currentTimeMillis() - init);
+                            } finally {
+                                latch.countDown();
                             }
                         }
-                        all.addAndGet(System.currentTimeMillis() - init);
-                    } finally {
-                        latch.countDown();
-                    }
-                }
-            }).start();
+                    })
+                    .start();
         }
 
         // Output, tps is not for accuracy, but it reflects the situation to a certain extent.
         new Thread(new Runnable() {
-            public void run() {
-                try {
-                    SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
-                    long lastCount = count.get();
-                    long sleepTime = 2000;
-                    long elapsd = sleepTime / 1000;
-                    boolean bfirst = true;
-                    while (latch.getCount() > 0) {
-                        long c = count.get() - lastCount;
-                        if (!bfirst)// The first time is inaccurate.
-                            System.out.println("[" + dateFormat.format(new Date()) + "] count: " + count.get() + ", error: " + error.get() + ",tps:" + (c / elapsd));
+                    public void run() {
+                        try {
+                            SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
+                            long lastCount = count.get();
+                            long sleepTime = 2000;
+                            long elapsd = sleepTime / 1000;
+                            boolean bfirst = true;
+                            while (latch.getCount() > 0) {
+                                long c = count.get() - lastCount;
+                                if (!bfirst) // The first time is inaccurate.
+                                System.out.println("[" + dateFormat.format(new Date()) + "] count: " + count.get()
+                                        + ", error: " + error.get() + ",tps:" + (c / elapsd));
 
-                        bfirst = false;
-                        lastCount = count.get();
-                        Thread.sleep(sleepTime);
+                                bfirst = false;
+                                lastCount = count.get();
+                                Thread.sleep(sleepTime);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
+                })
+                .start();
 
         latch.await();
 
@@ -206,16 +219,21 @@ public class PerformanceClientTest  {
         PerformanceUtils.printSeparator();
         PerformanceUtils.printHeader("Test Result");
         PerformanceUtils.printSeparator();
-        PerformanceUtils.printBody("Succeeded Requests: " + DecimalFormat.getIntegerInstance().format(succeeded));
+        PerformanceUtils.printBody(
+                "Succeeded Requests: " + DecimalFormat.getIntegerInstance().format(succeeded));
         PerformanceUtils.printBody("Failed Requests: " + failed);
         PerformanceUtils.printBody("Client Elapsed Time: " + clientElapsed + " ms");
         PerformanceUtils.printBody("Average Response Time: " + art + " ms");
         PerformanceUtils.printBody("Requests Per Second: " + qps + "/s");
-        PerformanceUtils.printBody("Throughput Per Second: " + DecimalFormat.getIntegerInstance().format(throughput) + " bytes/s");
+        PerformanceUtils.printBody(
+                "Throughput Per Second: " + DecimalFormat.getIntegerInstance().format(throughput) + " bytes/s");
         PerformanceUtils.printBorder();
     }
 
     static class PeformanceTestHandler extends ExchangeHandlerAdapter {
+        public PeformanceTestHandler() {
+            super(FrameworkModel.defaultModel());
+        }
 
         @Override
         public void connected(Channel channel) throws RemotingException {

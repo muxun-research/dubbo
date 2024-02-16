@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.alibaba.dubbo.rpc.cluster;
 
 import org.apache.dubbo.common.URL;
@@ -23,10 +22,10 @@ import org.apache.dubbo.rpc.cluster.Router;
 @Deprecated
 public interface RouterFactory extends org.apache.dubbo.rpc.cluster.RouterFactory {
 
-    Router getRouter(com.alibaba.dubbo.common.URL url);
+    com.alibaba.dubbo.rpc.cluster.Router getRouter(com.alibaba.dubbo.common.URL url);
 
     @Override
     default Router getRouter(URL url) {
-        return this.getRouter(new com.alibaba.dubbo.common.URL(url));
+        return this.getRouter(new com.alibaba.dubbo.common.DelegateURL(url));
     }
 }

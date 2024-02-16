@@ -16,12 +16,18 @@
  */
 package org.apache.dubbo.common.utils;
 
+import org.apache.dubbo.common.constants.CommonConstants;
+
 import java.io.OutputStream;
 import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
+
+import static java.lang.Thread.State.BLOCKED;
+import static java.lang.Thread.State.TIMED_WAITING;
+import static java.lang.Thread.State.WAITING;
 
 public class JVMUtil {
     public static void jstack(OutputStream stream) throws Exception {
@@ -32,15 +38,13 @@ public class JVMUtil {
     }
 
     private static String getThreadDumpString(ThreadInfo threadInfo) {
-        StringBuilder sb = new StringBuilder("\"" + threadInfo.getThreadName() + "\"" +
-                " Id=" + threadInfo.getThreadId() + " " +
-                threadInfo.getThreadState());
+        StringBuilder sb = new StringBuilder("\"" + threadInfo.getThreadName() + "\"" + " Id="
+                + threadInfo.getThreadId() + " " + threadInfo.getThreadState());
         if (threadInfo.getLockName() != null) {
             sb.append(" on " + threadInfo.getLockName());
         }
         if (threadInfo.getLockOwnerName() != null) {
-            sb.append(" owned by \"" + threadInfo.getLockOwnerName() +
-                    "\" Id=" + threadInfo.getLockOwnerId());
+            sb.append(" owned by \"" + threadInfo.getLockOwnerName() + "\" Id=" + threadInfo.getLockOwnerId());
         }
         if (threadInfo.isSuspended()) {
             sb.append(" (suspended)");
@@ -50,35 +54,35 @@ public class JVMUtil {
         }
         sb.append('\n');
         int i = 0;
-
+        // default is 32, means only print up to 32 lines
+        int jstackMaxLine = 32;
+        String jstackMaxLineStr = System.getProperty(CommonConstants.DUBBO_JSTACK_MAXLINE);
+        if (StringUtils.isNotEmpty(jstackMaxLineStr)) {
+            try {
+                jstackMaxLine = Integer.parseInt(jstackMaxLineStr);
+            } catch (Exception ignore) {
+            }
+        }
         StackTraceElement[] stackTrace = threadInfo.getStackTrace();
         MonitorInfo[] lockedMonitors = threadInfo.getLockedMonitors();
-        for (; i < stackTrace.length && i < 32; i++) {
+        for (; i < stackTrace.length && i < jstackMaxLine; i++) {
             StackTraceElement ste = stackTrace[i];
-            sb.append("\tat " + ste.toString());
+            sb.append("\tat ").append(ste.toString());
             sb.append('\n');
             if (i == 0 && threadInfo.getLockInfo() != null) {
                 Thread.State ts = threadInfo.getThreadState();
-                switch (ts) {
-                    case BLOCKED:
-                        sb.append("\t-  blocked on " + threadInfo.getLockInfo());
-                        sb.append('\n');
-                        break;
-                    case WAITING:
-                        sb.append("\t-  waiting on " + threadInfo.getLockInfo());
-                        sb.append('\n');
-                        break;
-                    case TIMED_WAITING:
-                        sb.append("\t-  waiting on " + threadInfo.getLockInfo());
-                        sb.append('\n');
-                        break;
-                    default:
+                if (BLOCKED.equals(ts)) {
+                    sb.append("\t-  blocked on ").append(threadInfo.getLockInfo());
+                    sb.append('\n');
+                } else if (WAITING.equals(ts) || TIMED_WAITING.equals(ts)) {
+                    sb.append("\t-  waiting on ").append(threadInfo.getLockInfo());
+                    sb.append('\n');
                 }
             }
 
             for (MonitorInfo mi : lockedMonitors) {
                 if (mi.getLockedStackDepth() == i) {
-                    sb.append("\t-  locked " + mi);
+                    sb.append("\t-  locked ").append(mi);
                     sb.append('\n');
                 }
             }

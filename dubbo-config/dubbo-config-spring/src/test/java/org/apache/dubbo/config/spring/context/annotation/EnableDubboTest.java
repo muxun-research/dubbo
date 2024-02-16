@@ -17,8 +17,9 @@
 package org.apache.dubbo.config.spring.context.annotation;
 
 import org.apache.dubbo.config.RegistryConfig;
-import org.apache.dubbo.config.context.ConfigManager;
+import org.apache.dubbo.config.bootstrap.DubboBootstrap;
 import org.apache.dubbo.config.spring.api.DemoService;
+import org.apache.dubbo.config.spring.beans.factory.annotation.ServiceAnnotationTestConfiguration;
 import org.apache.dubbo.config.spring.context.annotation.consumer.test.TestConsumerConfiguration;
 import org.apache.dubbo.config.spring.context.annotation.provider.DemoServiceImpl;
 
@@ -30,6 +31,7 @@ import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -46,24 +48,24 @@ import static org.springframework.core.annotation.AnnotationUtils.findAnnotation
  *
  * @since 2.5.8
  */
-public class EnableDubboTest {
+class EnableDubboTest {
 
     private AnnotationConfigApplicationContext context;
 
     @BeforeEach
     public void setUp() {
-        ConfigManager.getInstance().clear();
         context = new AnnotationConfigApplicationContext();
+        DubboBootstrap.reset();
     }
 
     @AfterEach
     public void tearDown() {
-        ConfigManager.getInstance().clear();
         context.close();
+        DubboBootstrap.reset();
     }
 
     @Test
-    public void testProvider() {
+    void testProvider() {
 
         context.register(TestProviderConfiguration.class);
 
@@ -82,28 +84,25 @@ public class EnableDubboTest {
 
         // Test @Transactional is present or not
         Assertions.assertNotNull(findAnnotation(beanClass, Transactional.class));
-
     }
 
     @Test
-    public void testConsumer() {
+    void testConsumer() {
 
         context.register(TestProviderConfiguration.class, TestConsumerConfiguration.class);
-
         context.refresh();
 
         TestConsumerConfiguration consumerConfiguration = context.getBean(TestConsumerConfiguration.class);
 
         DemoService demoService = consumerConfiguration.getDemoService();
-
         String value = demoService.sayName("Mercy");
-
         Assertions.assertEquals("Hello,Mercy", value);
 
         DemoService autowiredDemoService = consumerConfiguration.getAutowiredDemoService();
-
         Assertions.assertEquals("Hello,Mercy", autowiredDemoService.sayName("Mercy"));
 
+        DemoService autowiredReferDemoService = consumerConfiguration.getAutowiredReferDemoService();
+        Assertions.assertEquals("Hello,Mercy", autowiredReferDemoService.sayName("Mercy"));
 
         TestConsumerConfiguration.Child child = context.getBean(TestConsumerConfiguration.Child.class);
 
@@ -119,13 +118,13 @@ public class EnableDubboTest {
 
         // From Parent
 
-        demoService = child.getDemoServiceFromParent();
-
-        Assertions.assertNotNull(demoService);
-
-        value = demoService.sayName("Mercy");
-
-        Assertions.assertEquals("Hello,Mercy", value);
+        //        demoService = child.getDemoServiceFromParent();
+        //
+        //        Assertions.assertNotNull(demoService);
+        //
+        //        value = demoService.sayName("Mercy");
+        //
+        //        Assertions.assertEquals("Hello,Mercy", value);
 
         // From Ancestor
 
@@ -138,16 +137,16 @@ public class EnableDubboTest {
         Assertions.assertEquals("Hello,Mercy", value);
 
         // Test my-registry2 bean presentation
-        RegistryConfig registryConfig = context.getBean("my-registry2", RegistryConfig.class);
+        RegistryConfig registryConfig = context.getBean("my-registry", RegistryConfig.class);
 
         // Test multiple binding
         Assertions.assertEquals("N/A", registryConfig.getAddress());
-
     }
 
     @EnableDubbo(scanBasePackages = "org.apache.dubbo.config.spring.context.annotation.provider")
     @ComponentScan(basePackages = "org.apache.dubbo.config.spring.context.annotation.provider")
     @PropertySource("classpath:/META-INF/dubbo-provider.properties")
+    @Import(ServiceAnnotationTestConfiguration.class)
     @EnableTransactionManagement
     public static class TestProviderConfiguration {
 
@@ -162,17 +161,11 @@ public class EnableDubboTest {
                 }
 
                 @Override
-                public void commit(TransactionStatus status) throws TransactionException {
-
-                }
+                public void commit(TransactionStatus status) throws TransactionException {}
 
                 @Override
-                public void rollback(TransactionStatus status) throws TransactionException {
-
-                }
+                public void rollback(TransactionStatus status) throws TransactionException {}
             };
         }
     }
-
-
 }

@@ -25,14 +25,13 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
-
-import java.util.Map;
+import org.apache.dubbo.rpc.support.RpcUtils;
 
 import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
 
 /**
  * Perform check whether given provider token is matching with remote token or not. If it does not match
- * it will not allow to invoke remote method.
+ * it will not allow invoking remote method.
  *
  * @see Filter
  */
@@ -40,18 +39,19 @@ import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
 public class TokenFilter implements Filter {
 
     @Override
-    public Result invoke(Invoker<?> invoker, Invocation inv)
-            throws RpcException {
+    public Result invoke(Invoker<?> invoker, Invocation inv) throws RpcException {
         String token = invoker.getUrl().getParameter(TOKEN_KEY);
         if (ConfigUtils.isNotEmpty(token)) {
             Class<?> serviceType = invoker.getInterface();
-            Map<String, String> attachments = inv.getAttachments();
-            String remoteToken = attachments == null ? null : attachments.get(TOKEN_KEY);
+            String remoteToken = (String) inv.getObjectAttachmentWithoutConvert(TOKEN_KEY);
             if (!token.equals(remoteToken)) {
-                throw new RpcException("Invalid token! Forbid invoke remote service " + serviceType + " method " + inv.getMethodName() + "() from consumer " + RpcContext.getContext().getRemoteHost() + " to provider " + RpcContext.getContext().getLocalHost());
+                throw new RpcException("Invalid token! Forbid invoke remote service " + serviceType + " method "
+                        + RpcUtils.getMethodName(inv) + "() from consumer "
+                        + RpcContext.getServiceContext().getRemoteHost() + " to provider "
+                        + RpcContext.getServiceContext().getLocalHost()
+                        + ", consumer incorrect token is " + remoteToken);
             }
         }
         return invoker.invoke(inv);
     }
-
 }

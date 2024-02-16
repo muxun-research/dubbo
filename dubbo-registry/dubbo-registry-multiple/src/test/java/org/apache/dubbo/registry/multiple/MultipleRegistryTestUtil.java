@@ -19,12 +19,9 @@ package org.apache.dubbo.registry.multiple;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.common.utils.UrlUtils;
+import org.apache.dubbo.registry.ListenerRegistryWrapper;
 import org.apache.dubbo.registry.Registry;
-import org.apache.dubbo.registry.redis.RedisRegistry;
 import org.apache.dubbo.registry.zookeeper.ZookeeperRegistry;
-import org.apache.dubbo.rpc.RpcException;
-
-import redis.clients.jedis.Jedis;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -34,7 +31,6 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.dubbo.common.constants.RegistryConstants.APP_DYNAMIC_CONFIGURATORS_CATEGORY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.COMPATIBLE_CONFIG_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.CONFIGURATORS_CATEGORY;
 import static org.apache.dubbo.common.constants.RegistryConstants.DEFAULT_CATEGORY;
@@ -49,48 +45,14 @@ import static org.apache.dubbo.common.constants.RegistryConstants.ROUTE_PROTOCOL
 public class MultipleRegistryTestUtil {
     public static ZookeeperRegistry getZookeeperRegistry(Collection<Registry> registryCollection) {
         for (Registry registry : registryCollection) {
+            if (registry instanceof ListenerRegistryWrapper) {
+                registry = ((ListenerRegistryWrapper) registry).getRegistry();
+            }
             if (registry instanceof ZookeeperRegistry) {
                 return (ZookeeperRegistry) registry;
             }
         }
         return null;
-    }
-
-    public static RedisRegistry getRedisRegistry(Collection<Registry> registryCollection) {
-        for (Registry registry : registryCollection) {
-            if (registry instanceof RedisRegistry) {
-                return (RedisRegistry) registry;
-            }
-        }
-        return null;
-    }
-
-    public static String getRedisContent(int port, String key) {
-        Jedis jedis = null;
-        try {
-            jedis = new Jedis("127.0.0.1", port);
-            return jedis.get(key);
-        } catch (Throwable e) {
-            throw new RpcException("Failed to put to redis . cause: " + e.getMessage(), e);
-        } finally {
-            if (jedis != null) {
-                jedis.close();
-            }
-        }
-    }
-
-    public static String getRedisHashContent(int port, String key, String field) {
-        Jedis jedis = null;
-        try {
-            jedis = new Jedis("127.0.0.1", port);
-            return jedis.hget(key, field);
-        } catch (Throwable e) {
-            throw new RpcException("Failed to put to redis . cause: " + e.getMessage(), e);
-        } finally {
-            if (jedis != null) {
-                jedis.close();
-            }
-        }
     }
 
     /**
@@ -118,15 +80,15 @@ public class MultipleRegistryTestUtil {
         // providers
         List<URL> providerURLs = categoryUrls.getOrDefault(PROVIDERS_CATEGORY, Collections.emptyList());
         return providerURLs;
-
     }
 
     private static boolean isValidCategory(URL url) {
-        String category = url.getParameter(CATEGORY_KEY, DEFAULT_CATEGORY);
-        if ((ROUTERS_CATEGORY.equals(category) || ROUTE_PROTOCOL.equals(url.getProtocol())) ||
-                PROVIDERS_CATEGORY.equals(category) ||
-                CONFIGURATORS_CATEGORY.equals(category) || DYNAMIC_CONFIGURATORS_CATEGORY.equals(category) ||
-                APP_DYNAMIC_CONFIGURATORS_CATEGORY.equals(category)) {
+        String category = url.getCategory(DEFAULT_CATEGORY);
+        if ((ROUTERS_CATEGORY.equals(category) || ROUTE_PROTOCOL.equals(url.getProtocol()))
+                || PROVIDERS_CATEGORY.equals(category)
+                || CONFIGURATORS_CATEGORY.equals(category)
+                || DYNAMIC_CONFIGURATORS_CATEGORY.equals(category)
+                || APP_DYNAMIC_CONFIGURATORS_CATEGORY.equals(category)) {
             return true;
         }
         return false;

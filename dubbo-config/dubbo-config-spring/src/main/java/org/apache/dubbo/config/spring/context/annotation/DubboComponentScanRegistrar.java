@@ -18,10 +18,14 @@ package org.apache.dubbo.config.spring.context.annotation;
 
 import org.apache.dubbo.config.annotation.Service;
 import org.apache.dubbo.config.spring.beans.factory.annotation.ReferenceAnnotationBeanPostProcessor;
-import org.apache.dubbo.config.spring.beans.factory.annotation.ServiceAnnotationBeanPostProcessor;
-import org.apache.dubbo.config.spring.util.BeanRegistrar;
+import org.apache.dubbo.config.spring.beans.factory.annotation.ServiceAnnotationPostProcessor;
+import org.apache.dubbo.config.spring.context.DubboSpringInitializer;
 
-import org.springframework.beans.factory.BeanFactory;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
@@ -32,11 +36,6 @@ import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.util.ClassUtils;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
-
 import static org.springframework.beans.factory.support.BeanDefinitionBuilder.rootBeanDefinition;
 
 /**
@@ -45,7 +44,7 @@ import static org.springframework.beans.factory.support.BeanDefinitionBuilder.ro
  * @see Service
  * @see DubboComponentScan
  * @see ImportBeanDefinitionRegistrar
- * @see ServiceAnnotationBeanPostProcessor
+ * @see ServiceAnnotationPostProcessor
  * @see ReferenceAnnotationBeanPostProcessor
  * @since 2.5.7
  */
@@ -54,60 +53,73 @@ public class DubboComponentScanRegistrar implements ImportBeanDefinitionRegistra
     @Override
     public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
 
+        // initialize dubbo beans
+        DubboSpringInitializer.initialize(registry);
+
         Set<String> packagesToScan = getPackagesToScan(importingClassMetadata);
 
-        registerServiceAnnotationBeanPostProcessor(packagesToScan, registry);
-
-        registerReferenceAnnotationBeanPostProcessor(registry);
-
+        registerServiceAnnotationPostProcessor(packagesToScan, registry);
     }
 
     /**
-     * Registers {@link ServiceAnnotationBeanPostProcessor}
+     * Registers {@link ServiceAnnotationPostProcessor}
      *
      * @param packagesToScan packages to scan without resolving placeholders
      * @param registry       {@link BeanDefinitionRegistry}
      * @since 2.5.8
      */
-    private void registerServiceAnnotationBeanPostProcessor(Set<String> packagesToScan, BeanDefinitionRegistry registry) {
+    private void registerServiceAnnotationPostProcessor(Set<String> packagesToScan, BeanDefinitionRegistry registry) {
 
-        BeanDefinitionBuilder builder = rootBeanDefinition(ServiceAnnotationBeanPostProcessor.class);
+        BeanDefinitionBuilder builder = rootBeanDefinition(ServiceAnnotationPostProcessor.class);
         builder.addConstructorArgValue(packagesToScan);
         builder.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
         AbstractBeanDefinition beanDefinition = builder.getBeanDefinition();
         BeanDefinitionReaderUtils.registerWithGeneratedName(beanDefinition, registry);
-
-    }
-
-    /**
-     * Registers {@link ReferenceAnnotationBeanPostProcessor} into {@link BeanFactory}
-     *
-     * @param registry {@link BeanDefinitionRegistry}
-     */
-    private void registerReferenceAnnotationBeanPostProcessor(BeanDefinitionRegistry registry) {
-
-        // Register @Reference Annotation Bean Processor
-        BeanRegistrar.registerInfrastructureBean(registry,
-                ReferenceAnnotationBeanPostProcessor.BEAN_NAME, ReferenceAnnotationBeanPostProcessor.class);
-
     }
 
     private Set<String> getPackagesToScan(AnnotationMetadata metadata) {
-        AnnotationAttributes attributes = AnnotationAttributes.fromMap(
-                metadata.getAnnotationAttributes(DubboComponentScan.class.getName()));
-        String[] basePackages = attributes.getStringArray("basePackages");
-        Class<?>[] basePackageClasses = attributes.getClassArray("basePackageClasses");
-        String[] value = attributes.getStringArray("value");
-        // Appends value array attributes
-        Set<String> packagesToScan = new LinkedHashSet<String>(Arrays.asList(value));
-        packagesToScan.addAll(Arrays.asList(basePackages));
-        for (Class<?> basePackageClass : basePackageClasses) {
-            packagesToScan.add(ClassUtils.getPackageName(basePackageClass));
+        // get from @DubboComponentScan
+        Set<String> packagesToScan =
+                getPackagesToScan0(metadata, DubboComponentScan.class, "basePackages", "basePackageClasses");
+
+        // get from @EnableDubbo, compatible with spring 3.x
+        if (packagesToScan.isEmpty()) {
+            packagesToScan =
+                    getPackagesToScan0(metadata, EnableDubbo.class, "scanBasePackages", "scanBasePackageClasses");
         }
+
         if (packagesToScan.isEmpty()) {
             return Collections.singleton(ClassUtils.getPackageName(metadata.getClassName()));
         }
         return packagesToScan;
     }
 
+    private Set<String> getPackagesToScan0(
+            AnnotationMetadata metadata,
+            Class annotationClass,
+            String basePackagesName,
+            String basePackageClassesName) {
+
+        AnnotationAttributes attributes =
+                AnnotationAttributes.fromMap(metadata.getAnnotationAttributes(annotationClass.getName()));
+        if (attributes == null) {
+            return Collections.emptySet();
+        }
+
+        Set<String> packagesToScan = new LinkedHashSet<>();
+        // basePackages
+        String[] basePackages = attributes.getStringArray(basePackagesName);
+        packagesToScan.addAll(Arrays.asList(basePackages));
+        // basePackageClasses
+        Class<?>[] basePackageClasses = attributes.getClassArray(basePackageClassesName);
+        for (Class<?> basePackageClass : basePackageClasses) {
+            packagesToScan.add(ClassUtils.getPackageName(basePackageClass));
+        }
+        // value
+        if (attributes.containsKey("value")) {
+            String[] value = attributes.getStringArray("value");
+            packagesToScan.addAll(Arrays.asList(value));
+        }
+        return packagesToScan;
+    }
 }

@@ -14,51 +14,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.config;
 
-import org.apache.dubbo.config.context.ConfigManager;
+import org.apache.dubbo.config.bootstrap.DubboBootstrap;
 import org.apache.dubbo.service.DemoService;
 import org.apache.dubbo.service.DemoServiceImpl;
 
 import com.alibaba.dubbo.config.ReferenceConfig;
 import com.alibaba.dubbo.config.ServiceConfig;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class ConfigTest {
-    private com.alibaba.dubbo.config.ApplicationConfig applicationConfig = new com.alibaba.dubbo.config.ApplicationConfig("first-dubbo-test");
-    private com.alibaba.dubbo.config.RegistryConfig registryConfig = new com.alibaba.dubbo.config.RegistryConfig("multicast://224.5.6.7:1234");
+class ConfigTest {
+    private com.alibaba.dubbo.config.ApplicationConfig applicationConfig =
+            new com.alibaba.dubbo.config.ApplicationConfig("first-dubbo-test");
+    private com.alibaba.dubbo.config.RegistryConfig registryConfig =
+            new com.alibaba.dubbo.config.RegistryConfig("multicast://224.5.6.7:1234");
 
     @AfterEach
     public void tearDown() {
-        ConfigManager.getInstance().clear();
+        DubboBootstrap.reset();
     }
 
     @BeforeEach
     public void setup() {
         // In IDE env, make sure adding the following argument to VM options
         System.setProperty("java.net.preferIPv4Stack", "true");
-        ConfigManager.getInstance().clear();
+        DubboBootstrap.reset();
     }
 
     @Test
-    public void testConfig() {
+    void testConfig() {
         com.alibaba.dubbo.config.ServiceConfig<DemoService> service = new ServiceConfig<>();
         service.setApplication(applicationConfig);
         service.setRegistry(registryConfig);
         service.setInterface(DemoService.class);
         service.setRef(new DemoServiceImpl());
-        service.export();
 
         com.alibaba.dubbo.config.ReferenceConfig<DemoService> reference = new ReferenceConfig<>();
         reference.setApplication(applicationConfig);
         reference.setRegistry(registryConfig);
         reference.setInterface(DemoService.class);
-        DemoService demoService = reference.get();
+
+        DubboBootstrap bootstrap = DubboBootstrap.getInstance()
+                .application(applicationConfig)
+                .registry(registryConfig)
+                .service(service)
+                .reference(reference)
+                .start();
+
+        DemoService demoService = bootstrap.getCache().get(reference);
         String message = demoService.sayHello("dubbo");
         Assertions.assertEquals("hello dubbo", message);
     }

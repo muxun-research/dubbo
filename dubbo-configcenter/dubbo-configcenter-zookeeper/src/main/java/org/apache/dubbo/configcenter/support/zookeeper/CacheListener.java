@@ -16,106 +16,58 @@
  */
 package org.apache.dubbo.configcenter.support.zookeeper;
 
+import org.apache.dubbo.common.config.configcenter.ConfigurationListener;
 import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.configcenter.ConfigChangeEvent;
-import org.apache.dubbo.configcenter.ConfigChangeType;
-import org.apache.dubbo.configcenter.ConfigurationListener;
-import org.apache.dubbo.remoting.zookeeper.DataListener;
-import org.apache.dubbo.remoting.zookeeper.EventType;
+import org.apache.dubbo.common.utils.ConcurrentHashMapUtils;
+import org.apache.dubbo.rpc.model.ApplicationModel;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.CountDownLatch;
-
-import static org.apache.dubbo.common.constants.CommonConstants.DOT_SEPARATOR;
-import static org.apache.dubbo.common.constants.CommonConstants.PATH_SEPARATOR;
+import java.util.concurrent.ConcurrentMap;
 
 /**
- *
+ * one path has one zookeeperDataListener
  */
+public class CacheListener {
 
-public class CacheListener implements DataListener {
-    private static final int MIN_PATH_DEPTH = 5;
+    private final ConcurrentMap<String, ZookeeperDataListener> pathKeyListeners = new ConcurrentHashMap<>();
 
-    private Map<String, Set<ConfigurationListener>> keyListeners = new ConcurrentHashMap<>();
-    private CountDownLatch initializedLatch;
-    private String rootPath;
+    public CacheListener() {}
 
-    public CacheListener(String rootPath, CountDownLatch initializedLatch) {
-        this.rootPath = rootPath;
-        this.initializedLatch = initializedLatch;
+    public ZookeeperDataListener addListener(
+            String pathKey,
+            ConfigurationListener configurationListener,
+            String key,
+            String group,
+            ApplicationModel applicationModel) {
+        ZookeeperDataListener zookeeperDataListener = ConcurrentHashMapUtils.computeIfAbsent(
+                pathKeyListeners,
+                pathKey,
+                _pathKey -> new ZookeeperDataListener(_pathKey, key, group, applicationModel));
+        zookeeperDataListener.addListener(configurationListener);
+        return zookeeperDataListener;
     }
 
-    public void addListener(String key, ConfigurationListener configurationListener) {
-        Set<ConfigurationListener> listeners = this.keyListeners.computeIfAbsent(key, k -> new CopyOnWriteArraySet<>());
-        listeners.add(configurationListener);
-    }
-
-    public void removeListener(String key, ConfigurationListener configurationListener) {
-        Set<ConfigurationListener> listeners = this.keyListeners.get(key);
-        if (listeners != null) {
-            listeners.remove(configurationListener);
-        }
-    }
-
-    /**
-     * This is used to convert a configuration nodePath into a key
-     * TODO doc
-     *
-     * @param path
-     * @return key (nodePath less the config root path)
-     */
-    private String pathToKey(String path) {
-        if (StringUtils.isEmpty(path)) {
-            return path;
-        }
-        String groupKey = path.replace(rootPath + PATH_SEPARATOR, "").replaceAll(PATH_SEPARATOR, DOT_SEPARATOR);
-        return groupKey.substring(groupKey.indexOf(DOT_SEPARATOR) + 1);
-    }
-
-
-    @Override
-    public void dataChanged(String path, Object value, EventType eventType) {
-        if (eventType == null) {
-            return;
-        }
-
-        if (eventType == EventType.INITIALIZED) {
-            initializedLatch.countDown();
-            return;
-        }
-
-        if (path == null || (value == null && eventType != EventType.NodeDeleted)) {
-            return;
-        }
-
-        // TODO We only care the changes happened on a specific path level, for example
-        //  /dubbo/config/dubbo/configurators, other config changes not in this level will be ignored,
-        if (path.split("/").length >= MIN_PATH_DEPTH) {
-            String key = pathToKey(path);
-            ConfigChangeType changeType;
-            switch (eventType) {
-                case NodeCreated:
-                    changeType = ConfigChangeType.ADDED;
-                    break;
-                case NodeDeleted:
-                    changeType = ConfigChangeType.DELETED;
-                    break;
-                case NodeDataChanged:
-                    changeType = ConfigChangeType.MODIFIED;
-                    break;
-                default:
-                    return;
-            }
-
-            ConfigChangeEvent configChangeEvent = new ConfigChangeEvent(key, (String) value, changeType);
-            Set<ConfigurationListener> listeners = keyListeners.get(path);
-            if (CollectionUtils.isNotEmpty(listeners)) {
-                listeners.forEach(listener -> listener.process(configChangeEvent));
+    public ZookeeperDataListener removeListener(String pathKey, ConfigurationListener configurationListener) {
+        ZookeeperDataListener zookeeperDataListener = pathKeyListeners.get(pathKey);
+        if (zookeeperDataListener != null) {
+            zookeeperDataListener.removeListener(configurationListener);
+            if (CollectionUtils.isEmpty(zookeeperDataListener.getListeners())) {
+                pathKeyListeners.remove(pathKey);
             }
         }
+        return zookeeperDataListener;
+    }
+
+    public ZookeeperDataListener getCachedListener(String pathKey) {
+        return pathKeyListeners.get(pathKey);
+    }
+
+    public Map<String, ZookeeperDataListener> getPathKeyListeners() {
+        return pathKeyListeners;
+    }
+
+    public void clear() {
+        pathKeyListeners.clear();
     }
 }

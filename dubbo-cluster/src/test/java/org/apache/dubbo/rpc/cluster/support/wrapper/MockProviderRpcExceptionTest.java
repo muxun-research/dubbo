@@ -18,6 +18,7 @@ package org.apache.dubbo.rpc.cluster.support.wrapper;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
+import org.apache.dubbo.metrics.event.MetricsDispatcher;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.ProxyFactory;
@@ -27,23 +28,27 @@ import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.apache.dubbo.rpc.cluster.directory.StaticDirectory;
 import org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker;
-
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.apache.dubbo.rpc.model.ApplicationModel;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.dubbo.rpc.Constants.MOCK_KEY;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-public class MockProviderRpcExceptionTest {
+import static org.apache.dubbo.common.constants.CommonConstants.PATH_KEY;
+import static org.apache.dubbo.rpc.Constants.MOCK_KEY;
+import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
+
+class MockProviderRpcExceptionTest {
 
     List<Invoker<IHelloRpcService>> invokers = new ArrayList<Invoker<IHelloRpcService>>();
 
     @BeforeEach
     public void beforeMethod() {
+        ApplicationModel.defaultModel().getBeanFactory().registerBean(MetricsDispatcher.class);
         invokers.clear();
     }
 
@@ -51,23 +56,29 @@ public class MockProviderRpcExceptionTest {
      * Test if mock policy works fine: ProviderRpcException
      */
     @Test
-    public void testMockInvokerProviderRpcException() {
+    void testMockInvokerProviderRpcException() {
         URL url = URL.valueOf("remote://1.2.3.4/" + IHelloRpcService.class.getName());
-        url = url.addParameter(MOCK_KEY, "true").addParameter("invoke_return_error", "true");
+        url = url.addParameter(MOCK_KEY, "true")
+                .addParameter("invoke_return_error", "true")
+                .addParameter(
+                        REFER_KEY,
+                        URL.encode(PATH_KEY + "=" + MockProviderRpcExceptionTest.IHelloRpcService.class.getName()
+                                + "&" + "mock=true"
+                                + "&" + "proxy=jdk"));
         Invoker<IHelloRpcService> cluster = getClusterInvoker(url);
         RpcInvocation invocation = new RpcInvocation();
         invocation.setMethodName("getSomething4");
         Result ret = cluster.invoke(invocation);
         Assertions.assertEquals("something4mock", ret.getValue());
-
     }
 
-
     private Invoker<IHelloRpcService> getClusterInvokerMock(URL url, Invoker<IHelloRpcService> mockInvoker) {
-        // As `javassist` have a strict restriction of argument types, request will fail if Invocation do not contains complete parameter type information
+        // As `javassist` have a strict restriction of argument types, request will fail if Invocation do not contains
+        // complete parameter type information
         final URL durl = url.addParameter("proxy", "jdk");
         invokers.clear();
-        ProxyFactory proxy = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getExtension("jdk");
+        ProxyFactory proxy =
+                ExtensionLoader.getExtensionLoader(ProxyFactory.class).getExtension("jdk");
         Invoker<IHelloRpcService> invoker1 = proxy.getInvoker(new HelloRpcService(), IHelloRpcService.class, durl);
         invokers.add(invoker1);
         if (mockInvoker != null) {
@@ -130,7 +141,7 @@ public class MockProviderRpcExceptionTest {
             return "something3";
         }
 
-        public String getSomething4(){
+        public String getSomething4() {
             throw new RpcException("getSomething4|RpcException");
         }
 
@@ -147,11 +158,11 @@ public class MockProviderRpcExceptionTest {
         }
 
         public List<String> getListString() {
-            return Arrays.asList(new String[]{"Tom", "Jerry"});
+            return Arrays.asList(new String[] {"Tom", "Jerry"});
         }
 
         public List<User> getUsers() {
-            return Arrays.asList(new User[]{new User(1, "Tom"), new User(2, "Jerry")});
+            return Arrays.asList(new User[] {new User(1, "Tom"), new User(2, "Jerry")});
         }
 
         public void sayHello() {
@@ -160,9 +171,7 @@ public class MockProviderRpcExceptionTest {
     }
 
     public static class IHelloRpcServiceMock implements IHelloRpcService {
-        public IHelloRpcServiceMock() {
-
-        }
+        public IHelloRpcServiceMock() {}
 
         public String getSomething() {
             return "somethingmock";
@@ -176,16 +185,16 @@ public class MockProviderRpcExceptionTest {
             return "something3mock";
         }
 
-        public String getSomething4(){
+        public String getSomething4() {
             return "something4mock";
         }
 
         public List<String> getListString() {
-            return Arrays.asList(new String[]{"Tommock", "Jerrymock"});
+            return Arrays.asList(new String[] {"Tommock", "Jerrymock"});
         }
 
         public List<User> getUsers() {
-            return Arrays.asList(new User[]{new User(1, "Tommock"), new User(2, "Jerrymock")});
+            return Arrays.asList(new User[] {new User(1, "Tommock"), new User(2, "Jerrymock")});
         }
 
         public int getInt1() {
@@ -209,8 +218,7 @@ public class MockProviderRpcExceptionTest {
         private int id;
         private String name;
 
-        public User() {
-        }
+        public User() {}
 
         public User(int id, String name) {
             super();
@@ -233,6 +241,5 @@ public class MockProviderRpcExceptionTest {
         public void setName(String name) {
             this.name = name;
         }
-
     }
 }

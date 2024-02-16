@@ -16,10 +16,10 @@
  */
 package org.apache.dubbo.rpc.protocol.dubbo;
 
-
 import org.apache.dubbo.common.Parameters;
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.URLBuilder;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.exchange.ExchangeClient;
@@ -27,11 +27,11 @@ import org.apache.dubbo.remoting.exchange.ExchangeHandler;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.dubbo.remoting.Constants.RECONNECT_KEY;
-import static org.apache.dubbo.remoting.Constants.SEND_RECONNECT_KEY;
-import static org.apache.dubbo.rpc.protocol.dubbo.Constants.LAZY_CONNECT_INITIAL_STATE_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_SERVER_SHUTDOWN_TIMEOUT;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROTOCOL_FAILED_REQUEST;
 
 /**
  * dubbo protocol support class.
@@ -39,14 +39,18 @@ import static org.apache.dubbo.rpc.protocol.dubbo.Constants.LAZY_CONNECT_INITIAL
 @SuppressWarnings("deprecation")
 final class ReferenceCountExchangeClient implements ExchangeClient {
 
+    private static final ErrorTypeAwareLogger logger =
+            LoggerFactory.getErrorTypeAwareLogger(ReferenceCountExchangeClient.class);
     private final URL url;
     private final AtomicInteger referenceCount = new AtomicInteger(0);
-
+    private final AtomicInteger disconnectCount = new AtomicInteger(0);
+    private static final Integer warningPeriod = 50;
     private ExchangeClient client;
+    private int shutdownWaitTime = DEFAULT_SERVER_SHUTDOWN_TIMEOUT;
 
-    public ReferenceCountExchangeClient(ExchangeClient client) {
+    public ReferenceCountExchangeClient(ExchangeClient client, String codec) {
         this.client = client;
-        referenceCount.incrementAndGet();
+        this.referenceCount.incrementAndGet();
         this.url = client.getUrl();
     }
 
@@ -78,6 +82,17 @@ final class ReferenceCountExchangeClient implements ExchangeClient {
     @Override
     public CompletableFuture<Object> request(Object request, int timeout) throws RemotingException {
         return client.request(request, timeout);
+    }
+
+    @Override
+    public CompletableFuture<Object> request(Object request, ExecutorService executor) throws RemotingException {
+        return client.request(request, executor);
+    }
+
+    @Override
+    public CompletableFuture<Object> request(Object request, int timeout, ExecutorService executor)
+            throws RemotingException {
+        return client.request(request, timeout, executor);
     }
 
     @Override
@@ -169,21 +184,19 @@ final class ReferenceCountExchangeClient implements ExchangeClient {
      * @return
      */
     private void replaceWithLazyClient() {
-        // this is a defensive operation to avoid client is closed by accident, the initial state of the client is false
-        URL lazyUrl = URLBuilder.from(url)
-                .addParameter(LAZY_CONNECT_INITIAL_STATE_KEY, Boolean.FALSE)
-                .addParameter(RECONNECT_KEY, Boolean.FALSE)
-                .addParameter(SEND_RECONNECT_KEY, Boolean.TRUE.toString())
-                .addParameter("warning", Boolean.TRUE.toString())
-                .addParameter(LazyConnectExchangeClient.REQUEST_WITH_WARNING_KEY, true)
-                .addParameter("_client_memo", "referencecounthandler.replacewithlazyclient")
-                .build();
+        // start warning at second replaceWithLazyClient()
+        if (disconnectCount.getAndIncrement() % warningPeriod == 1) {
+            logger.warn(
+                    PROTOCOL_FAILED_REQUEST,
+                    "",
+                    "",
+                    url.getAddress() + " " + url.getServiceKey()
+                            + " safe guard client , should not be called ,must have a bug.");
+        }
 
-        /**
-         * the order of judgment in the if statement cannot be changed.
-         */
-        if (!(client instanceof LazyConnectExchangeClient) || client.isClosed()) {
-            client = new LazyConnectExchangeClient(lazyUrl, client.getExchangeHandler());
+        // the order of judgment in the if statement cannot be changed.
+        if (!(client instanceof LazyConnectExchangeClient)) {
+            client = new LazyConnectExchangeClient(url, client.getExchangeHandler());
         }
     }
 
@@ -198,5 +211,16 @@ final class ReferenceCountExchangeClient implements ExchangeClient {
     public void incrementAndGetCount() {
         referenceCount.incrementAndGet();
     }
-}
 
+    public int getCount() {
+        return referenceCount.get();
+    }
+
+    public int getShutdownWaitTime() {
+        return shutdownWaitTime;
+    }
+
+    public void setShutdownWaitTime(int shutdownWaitTime) {
+        this.shutdownWaitTime = shutdownWaitTime;
+    }
+}

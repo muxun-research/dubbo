@@ -20,11 +20,14 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
+import org.apache.dubbo.rpc.cluster.ClusterInvoker;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
+import org.apache.dubbo.rpc.support.RpcUtils;
 
 import java.util.List;
 
 import static org.apache.dubbo.common.constants.CommonConstants.TIMESTAMP_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_SERVICE_REFERENCE_PATH;
 import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_WARMUP;
 import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_WEIGHT;
 import static org.apache.dubbo.rpc.cluster.Constants.WARMUP_KEY;
@@ -44,6 +47,7 @@ public abstract class AbstractLoadBalance implements LoadBalance {
      * @return weight which takes warmup into account
      */
     static int calculateWarmupWeight(int uptime, int warmup, int weight) {
+        int ww = (int) (uptime / ((float) warmup / weight));
 		// 计算权重，其实相当于weight的时间百分比，直到达到weight，weight*(uptime/warmup)
 		// 意思是，100的weight，如果需要预热10分钟，则每分钟增加10%的流量
 		// 权重为[1, weight]
@@ -69,7 +73,6 @@ public abstract class AbstractLoadBalance implements LoadBalance {
 
     protected abstract <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation);
 
-
     /**
 	 * 获取调用invoker的权重
 	 * 如果启动时间处于预热时间内，权重会按比例降低
@@ -77,27 +80,36 @@ public abstract class AbstractLoadBalance implements LoadBalance {
      * @param invocation the invocation of this invoker
      * @return weight
      */
-    int getWeight(Invoker<?> invoker, Invocation invocation) {
-		// 获取weight的配置，默认为100
-        int weight = invoker.getUrl().getMethodParameter(invocation.getMethodName(), WEIGHT_KEY, DEFAULT_WEIGHT);
-        if (weight > 0) {
-            long timestamp = invoker.getUrl().getParameter(TIMESTAMP_KEY, 0L);
-            if (timestamp > 0L) {
-				// 获取启动的总时长
-                long uptime = System.currentTimeMillis() - timestamp;
-				// 如果时间出现异常，weight为1
-                if (uptime < 0) {
-                    return 1;
-				}
-				// 获取预热的总时长
-                int warmup = invoker.getUrl().getParameter(WARMUP_KEY, DEFAULT_WARMUP);
-				// 如果处于预热中，则需要计算当前的权重
-                if (uptime > 0 && uptime < warmup) {
-                    weight = calculateWarmupWeight((int)uptime, warmup, weight);
+    protected int getWeight(Invoker<?> invoker, Invocation invocation) {
+        int weight;
+        URL url = invoker.getUrl();
+        if (invoker instanceof ClusterInvoker) {
+            url = ((ClusterInvoker<?>) invoker).getRegistryUrl();
+        }
+
+        // 获取weight的配置，默认为100
+        if (REGISTRY_SERVICE_REFERENCE_PATH.equals(url.getServiceInterface())) {
+            weight = url.getParameter(WEIGHT_KEY, DEFAULT_WEIGHT);
+        } else {
+            weight = url.getMethodParameter(RpcUtils.getMethodName(invocation), WEIGHT_KEY, DEFAULT_WEIGHT);
+            if (weight > 0) {
+                long timestamp = invoker.getUrl().getParameter(TIMESTAMP_KEY, 0L);
+                if (timestamp > 0L) {
+                    // 获取启动的总时长
+                    long uptime = System.currentTimeMillis() - timestamp;
+                    if (uptime < 0) {
+                        return 1;
+                    }
+                    // 获取预热的总时长
+                    int warmup = invoker.getUrl().getParameter(WARMUP_KEY, DEFAULT_WARMUP);
+                    // 如果处于预热中，则需要计算当前的权重
+                    if (uptime > 0 && uptime < warmup) {
+                        weight = calculateWarmupWeight((int) uptime, warmup, weight);
+                    }
                 }
             }
-		}
-		// 否则取weight和0的最大值
+        }
+        // 否则取weight和0的最大值
         return Math.max(weight, 0);
     }
 }

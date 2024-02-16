@@ -16,9 +16,7 @@
  */
 package org.apache.dubbo.rpc.cluster;
 
-
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.rpc.AppResponse;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
@@ -27,41 +25,40 @@ import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.List;
 
 import static org.apache.dubbo.rpc.cluster.Constants.CLUSTER_STICKY_KEY;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 @SuppressWarnings("unchecked")
-public class StickyTest {
+class StickyTest {
 
     private List<Invoker<StickyTest>> invokers = new ArrayList<Invoker<StickyTest>>();
 
-
     private Invoker<StickyTest> invoker1 = mock(Invoker.class);
-    private  Invoker<StickyTest> invoker2 = mock(Invoker.class);
+    private Invoker<StickyTest> invoker2 = mock(Invoker.class);
     private RpcInvocation invocation;
     private Directory<StickyTest> dic;
     private Result result = new AppResponse();
     private StickyClusterInvoker<StickyTest> clusterinvoker = null;
-    private URL url = URL.valueOf("test://test:11/test?"
-                    + "&loadbalance=roundrobin"
-                    + "&" + CLUSTER_STICKY_KEY + "=true"
-    );
+    private URL url =
+            URL.valueOf("test://test:11/test?" + "&loadbalance=roundrobin" + "&" + CLUSTER_STICKY_KEY + "=true");
     private int runs = 1;
 
     @BeforeEach
     public void setUp() throws Exception {
         dic = mock(Directory.class);
+
         invocation = new RpcInvocation();
 
         given(dic.getUrl()).willReturn(url);
+        given(dic.getConsumerUrl()).willReturn(url);
         given(dic.list(invocation)).willReturn(invokers);
         given(dic.getInterface()).willReturn(StickyTest.class);
 
@@ -69,39 +66,37 @@ public class StickyTest {
         invokers.add(invoker2);
 
         clusterinvoker = new StickyClusterInvoker<StickyTest>(dic);
-
-        ExtensionLoader.resetExtensionLoader(LoadBalance.class);
     }
 
     @Test
-    public void testStickyNoCheck() {
-        int count = testSticky(null, false);
+    void testStickyNoCheck() {
+        int count = testSticky("t1", false);
         System.out.println(count);
         Assertions.assertTrue(count > 0 && count <= runs);
     }
 
     @Test
-    public void testStickyForceCheck() {
-        int count = testSticky(null, true);
+    void testStickyForceCheck() {
+        int count = testSticky("t2", true);
         Assertions.assertTrue(count == 0 || count == runs);
     }
 
     @Test
-    public void testMethodStickyNoCheck() {
+    void testMethodStickyNoCheck() {
         int count = testSticky("method1", false);
         System.out.println(count);
         Assertions.assertTrue(count > 0 && count <= runs);
     }
 
     @Test
-    public void testMethodStickyForceCheck() {
+    void testMethodStickyForceCheck() {
         int count = testSticky("method1", true);
         Assertions.assertTrue(count == 0 || count == runs);
     }
 
     @Test
-    public void testMethodsSticky() {
-        for (int i = 0; i < 100; i++) {//Two different methods should always use the same invoker every time.
+    void testMethodsSticky() {
+        for (int i = 0; i < 100; i++) { // Two different methods should always use the same invoker every time.
             int count1 = testSticky("method1", true);
             int count2 = testSticky("method2", true);
             Assertions.assertEquals(count1, count2);
@@ -137,7 +132,6 @@ public class StickyTest {
         return count;
     }
 
-
     static class StickyClusterInvoker<T> extends AbstractClusterInvoker<T> {
         private Invoker<T> selectedInvoker;
 
@@ -150,8 +144,8 @@ public class StickyTest {
         }
 
         @Override
-        protected Result doInvoke(Invocation invocation, List<Invoker<T>> invokers,
-                                  LoadBalance loadbalance) throws RpcException {
+        protected Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance)
+                throws RpcException {
             Invoker<T> invoker = select(loadbalance, invocation, invokers, null);
             selectedInvoker = invoker;
             return null;

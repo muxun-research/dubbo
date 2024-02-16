@@ -16,7 +16,7 @@
  */
 package org.apache.dubbo.rpc.protocol;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.rpc.Exporter;
 import org.apache.dubbo.rpc.Invoker;
@@ -26,7 +26,7 @@ import org.apache.dubbo.rpc.Invoker;
  */
 public abstract class AbstractExporter<T> implements Exporter<T> {
 
-    protected final Logger logger = LoggerFactory.getLogger(getClass());
+    protected final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(getClass());
 
     private final Invoker<T> invoker;
 
@@ -51,17 +51,28 @@ public abstract class AbstractExporter<T> implements Exporter<T> {
     }
 
     @Override
-    public void unexport() {
+    public final void unexport() {
         if (unexported) {
             return;
         }
         unexported = true;
         getInvoker().destroy();
+        afterUnExport();
     }
+
+    @Override
+    public void register() {}
+
+    @Override
+    public void unregister() {}
+
+    /**
+     * subclasses need to override this method to destroy resources.
+     */
+    public void afterUnExport() {}
 
     @Override
     public String toString() {
         return getInvoker().toString();
     }
-
 }

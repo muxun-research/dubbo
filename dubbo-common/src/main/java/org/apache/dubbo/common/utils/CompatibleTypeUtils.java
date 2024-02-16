@@ -21,6 +21,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -32,8 +35,12 @@ public class CompatibleTypeUtils {
 
     private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
-    private CompatibleTypeUtils() {
-    }
+    /**
+     * the text to parse such as "2007-12-03T10:15:30"
+     */
+    private static final int ISO_LOCAL_DATE_TIME_MIN_LEN = 19;
+
+    private CompatibleTypeUtils() {}
 
     /**
      * Compatible type convert. Null value is allowed to pass in. If no conversion is needed, then the original value
@@ -56,8 +63,10 @@ public class CompatibleTypeUtils {
             String string = (String) value;
             if (char.class.equals(type) || Character.class.equals(type)) {
                 if (string.length() != 1) {
-                    throw new IllegalArgumentException(String.format("CAN NOT convert String(%s) to char!" +
-                            " when convert String to char, the String MUST only 1 char.", string));
+                    throw new IllegalArgumentException(String.format(
+                            "CAN NOT convert String(%s) to char!"
+                                    + " when convert String to char, the String MUST only 1 char.",
+                            string));
                 }
                 return string.charAt(0);
             }
@@ -91,7 +100,9 @@ public class CompatibleTypeUtils {
             if (type == Boolean.class || type == boolean.class) {
                 return Boolean.valueOf(string);
             }
-            if (type == Date.class || type == java.sql.Date.class || type == java.sql.Timestamp.class
+            if (type == Date.class
+                    || type == java.sql.Date.class
+                    || type == java.sql.Timestamp.class
                     || type == java.sql.Time.class) {
                 try {
                     Date date = new SimpleDateFormat(DATE_FORMAT).parse(string);
@@ -106,8 +117,33 @@ public class CompatibleTypeUtils {
                     }
                     return date;
                 } catch (ParseException e) {
-                    throw new IllegalStateException("Failed to parse date " + value + " by format "
-                            + DATE_FORMAT + ", cause: " + e.getMessage(), e);
+                    throw new IllegalStateException(
+                            "Failed to parse date " + value + " by format " + DATE_FORMAT + ", cause: "
+                                    + e.getMessage(),
+                            e);
+                }
+            }
+            if (type == java.time.LocalDateTime.class) {
+                if (StringUtils.isEmpty(string)) {
+                    return null;
+                }
+                return LocalDateTime.parse(string);
+            }
+            if (type == java.time.LocalDate.class) {
+                if (StringUtils.isEmpty(string)) {
+                    return null;
+                }
+                return LocalDate.parse(string);
+            }
+            if (type == java.time.LocalTime.class) {
+                if (StringUtils.isEmpty(string)) {
+                    return null;
+                }
+
+                if (string.length() >= ISO_LOCAL_DATE_TIME_MIN_LEN) {
+                    return LocalDateTime.parse(string).toLocalTime();
+                } else {
+                    return LocalTime.parse(string);
                 }
             }
             if (type == Class.class) {
@@ -151,7 +187,7 @@ public class CompatibleTypeUtils {
                 return BigInteger.valueOf(number.longValue());
             }
             if (type == BigDecimal.class) {
-                return BigDecimal.valueOf(number.doubleValue());
+                return new BigDecimal(number.toString());
             }
             if (type == Date.class) {
                 return new Date(number.longValue());
@@ -173,7 +209,8 @@ public class CompatibleTypeUtils {
             }
             if (!type.isInterface()) {
                 try {
-                    Collection result = (Collection) type.newInstance();
+                    Collection result =
+                            (Collection) type.getDeclaredConstructor().newInstance();
                     result.addAll(collection);
                     return result;
                 } catch (Throwable ignored) {
@@ -187,19 +224,19 @@ public class CompatibleTypeUtils {
             }
         }
         if (value.getClass().isArray() && Collection.class.isAssignableFrom(type)) {
+            int length = Array.getLength(value);
             Collection collection;
             if (!type.isInterface()) {
                 try {
-                    collection = (Collection) type.newInstance();
-                } catch (Throwable e) {
-                    collection = new ArrayList<Object>();
+                    collection = (Collection) type.getDeclaredConstructor().newInstance();
+                } catch (Exception e) {
+                    collection = new ArrayList<Object>(length);
                 }
             } else if (type == Set.class) {
-                collection = new HashSet<Object>();
+                collection = new HashSet<Object>(Math.max((int) (length / .75f) + 1, 16));
             } else {
-                collection = new ArrayList<Object>();
+                collection = new ArrayList<Object>(length);
             }
-            int length = Array.getLength(value);
             for (int i = 0; i < length; i++) {
                 collection.add(Array.get(value, i));
             }

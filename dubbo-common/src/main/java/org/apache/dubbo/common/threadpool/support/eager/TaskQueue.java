@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.threadpool.support.eager;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -50,7 +49,7 @@ public class TaskQueue<R extends Runnable> extends LinkedBlockingQueue<Runnable>
 
         int currentPoolThreadSize = executor.getPoolSize();
         // have free worker. put task into queue to let the worker deal with task.
-        if (executor.getSubmittedTaskCount() < currentPoolThreadSize) {
+        if (executor.getActiveCount() < currentPoolThreadSize) {
             return super.offer(runnable);
         }
 

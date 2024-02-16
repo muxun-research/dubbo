@@ -17,17 +17,20 @@
 package org.apache.dubbo.rpc.filter;
 
 import org.apache.dubbo.common.extension.Activate;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.utils.ConcurrentHashSet;
+import org.apache.dubbo.common.threadpool.manager.FrameworkExecutorRepository;
+import org.apache.dubbo.common.utils.ConcurrentHashMapUtils;
 import org.apache.dubbo.common.utils.ConfigUtils;
-import org.apache.dubbo.common.utils.NamedThreadFactory;
+import org.apache.dubbo.common.utils.StringUtils;
+import org.apache.dubbo.rpc.Constants;
 import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.support.AccessLogData;
+import org.apache.dubbo.rpc.support.RpcUtils;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -35,18 +38,20 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.apache.dubbo.common.constants.CommonConstants.GROUP_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.PROVIDER;
-import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
-import static org.apache.dubbo.rpc.Constants.ACCESS_LOG_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_FILTER_VALIDATION_EXCEPTION;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.VULNERABILITY_WARNING;
+import static org.apache.dubbo.rpc.Constants.ACCESS_LOG_FIXED_PATH_KEY;
 
 /**
  * Record access log for the service.
@@ -62,33 +67,34 @@ import static org.apache.dubbo.rpc.Constants.ACCESS_LOG_KEY;
  * &lt;/logger&gt;
  * </pre></code>
  */
-@Activate(group = PROVIDER, value = ACCESS_LOG_KEY)
+@Activate(group = PROVIDER)
 public class AccessLogFilter implements Filter {
 
-    private static final Logger logger = LoggerFactory.getLogger(AccessLogFilter.class);
+    public static ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(AccessLogFilter.class);
 
     private static final String LOG_KEY = "dubbo.accesslog";
 
     private static final int LOG_MAX_BUFFER = 5000;
 
-    private static final long LOG_OUTPUT_INTERVAL = 5000;
+    private static long LOG_OUTPUT_INTERVAL = 5000;
 
     private static final String FILE_DATE_FORMAT = "yyyyMMdd";
 
     // It's safe to declare it as singleton since it runs on single thread only
-    private static final DateFormat FILE_NAME_FORMATTER = new SimpleDateFormat(FILE_DATE_FORMAT);
+    private final DateFormat fileNameFormatter = new SimpleDateFormat(FILE_DATE_FORMAT);
 
-    private static final Map<String, Set<AccessLogData>> LOG_ENTRIES = new ConcurrentHashMap<String, Set<AccessLogData>>();
+    private final ConcurrentMap<String, Queue<AccessLogData>> logEntries = new ConcurrentHashMap<>();
 
-    private static final ScheduledExecutorService LOG_SCHEDULED = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-Access-Log", true));
+    private final AtomicBoolean scheduled = new AtomicBoolean();
+    private ScheduledFuture<?> future;
+
+    private static final String LINE_SEPARATOR = "line.separator";
 
     /**
      * Default constructor initialize demon thread for writing into access log file with names with access log key
      * defined in url <b>accesslog</b>
      */
-    public AccessLogFilter() {
-        LOG_SCHEDULED.scheduleWithFixedDelay(this::writeLogToFile, LOG_OUTPUT_INTERVAL, LOG_OUTPUT_INTERVAL, TimeUnit.MILLISECONDS);
-    }
+    public AccessLogFilter() {}
 
     /**
      * This method logs the access log for service method invocation call.
@@ -100,83 +106,138 @@ public class AccessLogFilter implements Filter {
      */
     @Override
     public Result invoke(Invoker<?> invoker, Invocation inv) throws RpcException {
-        try {
-            String accessLogKey = invoker.getUrl().getParameter(ACCESS_LOG_KEY);
-            if (ConfigUtils.isNotEmpty(accessLogKey)) {
-                AccessLogData logData = buildAccessLogData(invoker, inv);
-                log(accessLogKey, logData);
+        String accessLogKey = invoker.getUrl().getParameter(Constants.ACCESS_LOG_KEY);
+        boolean isFixedPath = invoker.getUrl().getParameter(ACCESS_LOG_FIXED_PATH_KEY, true);
+        if (StringUtils.isEmpty(accessLogKey)) {
+            // Notice that disable accesslog of one service may cause the whole application to stop collecting
+            // accesslog.
+            // It's recommended to use application level configuration to enable or disable accesslog if dynamically
+            // configuration is needed .
+            if (future != null && !future.isCancelled()) {
+                future.cancel(true);
+                logger.info("Access log task cancelled ...");
             }
+            return invoker.invoke(inv);
+        }
+
+        if (scheduled.compareAndSet(false, true)) {
+            future = inv.getModuleModel()
+                    .getApplicationModel()
+                    .getFrameworkModel()
+                    .getBeanFactory()
+                    .getBean(FrameworkExecutorRepository.class)
+                    .getSharedScheduledExecutor()
+                    .scheduleWithFixedDelay(
+                            new AccesslogRefreshTask(isFixedPath),
+                            LOG_OUTPUT_INTERVAL,
+                            LOG_OUTPUT_INTERVAL,
+                            TimeUnit.MILLISECONDS);
+            logger.info("Access log task started ...");
+        }
+        Optional<AccessLogData> optionalAccessLogData = Optional.empty();
+        try {
+            optionalAccessLogData = Optional.of(buildAccessLogData(invoker, inv));
         } catch (Throwable t) {
-            logger.warn("Exception in AccessLogFilter of service(" + invoker + " -> " + inv + ")", t);
+            logger.warn(
+                    CONFIG_FILTER_VALIDATION_EXCEPTION,
+                    "",
+                    "",
+                    "Exception in AccessLogFilter of service(" + invoker + " -> " + inv + ")",
+                    t);
         }
-        return invoker.invoke(inv);
+        try {
+            return invoker.invoke(inv);
+        } finally {
+            String finalAccessLogKey = accessLogKey;
+            optionalAccessLogData.ifPresent(logData -> {
+                logData.setOutTime(new Date());
+                log(finalAccessLogKey, logData, isFixedPath);
+            });
+        }
     }
 
-    private void log(String accessLog, AccessLogData accessLogData) {
-        Set<AccessLogData> logSet = LOG_ENTRIES.computeIfAbsent(accessLog, k -> new ConcurrentHashSet<>());
+    private void log(String accessLog, AccessLogData accessLogData, boolean isFixedPath) {
+        Queue<AccessLogData> logQueue =
+                ConcurrentHashMapUtils.computeIfAbsent(logEntries, accessLog, k -> new ConcurrentLinkedQueue<>());
 
-        if (logSet.size() < LOG_MAX_BUFFER) {
-            logSet.add(accessLogData);
+        if (logQueue.size() < LOG_MAX_BUFFER) {
+            logQueue.add(accessLogData);
         } else {
-            //TODO we needs use force writing to file so that buffer gets clear and new log can be written.
-            logger.warn("AccessLog buffer is full skipping buffer ");
+            logger.warn(
+                    CONFIG_FILTER_VALIDATION_EXCEPTION,
+                    "",
+                    "",
+                    "AccessLog buffer is full. Do a force writing to file to clear buffer.");
+            // just write current logSet to file.
+            writeLogSetToFile(accessLog, logQueue, isFixedPath);
+            // after force writing, add accessLogData to current logSet
+            logQueue.add(accessLogData);
         }
     }
 
-    private void writeLogToFile() {
-        if (!LOG_ENTRIES.isEmpty()) {
-            for (Map.Entry<String, Set<AccessLogData>> entry : LOG_ENTRIES.entrySet()) {
-                try {
-                    String accessLog = entry.getKey();
-                    Set<AccessLogData> logSet = entry.getValue();
-                    if (ConfigUtils.isDefault(accessLog)) {
-                        processWithServiceLogger(logSet);
-                    } else {
-                        File file = new File(accessLog);
-                        createIfLogDirAbsent(file);
-                        if (logger.isDebugEnabled()) {
-                            logger.debug("Append log to " + accessLog);
-                        }
-                        renameFile(file);
-                        processWithAccessKeyLogger(logSet, file);
+    private void writeLogSetToFile(String accessLog, Queue<AccessLogData> logSet, boolean isFixedPath) {
+        try {
+            if (ConfigUtils.isDefault(accessLog)) {
+                processWithServiceLogger(logSet);
+            } else {
+                if (isFixedPath) {
+                    logger.warn(
+                            VULNERABILITY_WARNING,
+                            "Change of accesslog file path not allowed. ",
+                            "",
+                            "Will write to the default location, \" +\n"
+                                    + "                        \"please enable this feature by setting 'accesslog.fixed.path=true' and restart the process. \" +\n"
+                                    + "                        \"We highly recommend to not enable this feature in production for security concerns, \" +\n"
+                                    + "                        \"please be fully aware of the potential risks before doing so!");
+                    processWithServiceLogger(logSet);
+                } else {
+                    logger.warn(
+                            VULNERABILITY_WARNING,
+                            "Accesslog file path changed to " + accessLog + ", be aware of possible vulnerabilities!",
+                            "",
+                            "");
+                    File file = new File(accessLog);
+                    createIfLogDirAbsent(file);
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Append log to " + accessLog);
                     }
-
-                } catch (Exception e) {
-                    logger.error(e.getMessage(), e);
+                    renameFile(file);
+                    processWithAccessKeyLogger(logSet, file);
                 }
             }
+        } catch (Exception e) {
+            logger.error(CONFIG_FILTER_VALIDATION_EXCEPTION, "", "", e.getMessage(), e);
         }
     }
 
-    private void processWithAccessKeyLogger(Set<AccessLogData> logSet, File file) throws IOException {
-        try (FileWriter writer = new FileWriter(file, true)) {
-            for (Iterator<AccessLogData> iterator = logSet.iterator();
-                 iterator.hasNext();
-                 iterator.remove()) {
-                writer.write(iterator.next().getLogMessage());
-                writer.write(System.getProperty("line.separator"));
+    private void processWithAccessKeyLogger(Queue<AccessLogData> logQueue, File file) throws IOException {
+        FileWriter writer = new FileWriter(file, true);
+        try {
+            while (!logQueue.isEmpty()) {
+                writer.write(logQueue.poll().getLogMessage());
+                writer.write(System.getProperty(LINE_SEPARATOR));
             }
+        } finally {
             writer.flush();
+            writer.close();
         }
     }
 
     private AccessLogData buildAccessLogData(Invoker<?> invoker, Invocation inv) {
         AccessLogData logData = AccessLogData.newLogData();
         logData.setServiceName(invoker.getInterface().getName());
-        logData.setMethodName(inv.getMethodName());
-        logData.setVersion(invoker.getUrl().getParameter(VERSION_KEY));
-        logData.setGroup(invoker.getUrl().getParameter(GROUP_KEY));
+        logData.setMethodName(RpcUtils.getMethodName(inv));
+        logData.setVersion(invoker.getUrl().getVersion());
+        logData.setGroup(invoker.getUrl().getGroup());
         logData.setInvocationTime(new Date());
         logData.setTypes(inv.getParameterTypes());
         logData.setArguments(inv.getArguments());
         return logData;
     }
 
-    private void processWithServiceLogger(Set<AccessLogData> logSet) {
-        for (Iterator<AccessLogData> iterator = logSet.iterator();
-             iterator.hasNext();
-             iterator.remove()) {
-            AccessLogData logData = iterator.next();
+    private void processWithServiceLogger(Queue<AccessLogData> logQueue) {
+        while (!logQueue.isEmpty()) {
+            AccessLogData logData = logQueue.poll();
             LoggerFactory.getLogger(LOG_KEY + "." + logData.getServiceName()).info(logData.getLogMessage());
         }
     }
@@ -190,12 +251,46 @@ public class AccessLogFilter implements Filter {
 
     private void renameFile(File file) {
         if (file.exists()) {
-            String now = FILE_NAME_FORMATTER.format(new Date());
-            String last = FILE_NAME_FORMATTER.format(new Date(file.lastModified()));
+            String now = fileNameFormatter.format(new Date());
+            String last = fileNameFormatter.format(new Date(file.lastModified()));
             if (!now.equals(last)) {
-                File archive = new File(file.getAbsolutePath() + "." + last);
+                File archive = new File(file.getAbsolutePath() + "." + now);
                 file.renameTo(archive);
             }
         }
+    }
+
+    class AccesslogRefreshTask implements Runnable {
+        private final boolean isFixedPath;
+
+        public AccesslogRefreshTask(boolean isFixedPath) {
+            this.isFixedPath = isFixedPath;
+        }
+
+        @Override
+        public void run() {
+            if (!AccessLogFilter.this.logEntries.isEmpty()) {
+                for (Map.Entry<String, Queue<AccessLogData>> entry : AccessLogFilter.this.logEntries.entrySet()) {
+                    String accessLog = entry.getKey();
+                    Queue<AccessLogData> logSet = entry.getValue();
+                    writeLogSetToFile(accessLog, logSet, isFixedPath);
+                }
+            }
+        }
+    }
+
+    // test purpose only
+    public static void setInterval(long interval) {
+        LOG_OUTPUT_INTERVAL = interval;
+    }
+
+    // test purpose only
+    public static long getInterval() {
+        return LOG_OUTPUT_INTERVAL;
+    }
+
+    // test purpose only
+    public void destroy() {
+        future.cancel(true);
     }
 }

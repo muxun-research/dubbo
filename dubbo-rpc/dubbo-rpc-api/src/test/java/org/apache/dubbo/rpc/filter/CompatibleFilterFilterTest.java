@@ -22,6 +22,7 @@ import org.apache.dubbo.rpc.AsyncRpcResult;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
+import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.support.DemoService;
 import org.apache.dubbo.rpc.support.Type;
 
@@ -37,7 +38,7 @@ import static org.mockito.Mockito.mock;
 /**
  * CompatibleFilterTest.java
  */
-public class CompatibleFilterFilterTest {
+class CompatibleFilterFilterTest {
     private CompatibleFilter compatibleFilter = new CompatibleFilter();
     private Invocation invocation;
     private Invoker invoker;
@@ -48,11 +49,11 @@ public class CompatibleFilterFilterTest {
     }
 
     @Test
-    public void testInvokerGeneric() {
-        invocation = mock(Invocation.class);
+    void testInvokerGeneric() {
+        invocation = mock(RpcInvocation.class);
         given(invocation.getMethodName()).willReturn("$enumlength");
-        given(invocation.getParameterTypes()).willReturn(new Class<?>[]{Enum.class});
-        given(invocation.getArguments()).willReturn(new Object[]{"hello"});
+        given(invocation.getParameterTypes()).willReturn(new Class<?>[] {Enum.class});
+        given(invocation.getArguments()).willReturn(new Object[] {"hello"});
 
         invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);
@@ -68,11 +69,11 @@ public class CompatibleFilterFilterTest {
     }
 
     @Test
-    public void testResulthasException() {
-        invocation = mock(Invocation.class);
+    void testResultHasException() {
+        invocation = mock(RpcInvocation.class);
         given(invocation.getMethodName()).willReturn("enumlength");
-        given(invocation.getParameterTypes()).willReturn(new Class<?>[]{Enum.class});
-        given(invocation.getArguments()).willReturn(new Object[]{"hello"});
+        given(invocation.getParameterTypes()).willReturn(new Class<?>[] {Enum.class});
+        given(invocation.getArguments()).willReturn(new Object[] {"hello"});
 
         invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);
@@ -89,75 +90,77 @@ public class CompatibleFilterFilterTest {
     }
 
     @Test
-    public void testInvokerJsonPojoSerialization() throws Exception {
-        invocation = mock(Invocation.class);
+    void testInvokerJsonPojoSerialization() throws Exception {
+        invocation = mock(RpcInvocation.class);
         given(invocation.getMethodName()).willReturn("enumlength");
-        given(invocation.getParameterTypes()).willReturn(new Class<?>[]{Type[].class});
-        given(invocation.getArguments()).willReturn(new Object[]{"hello"});
+        given(invocation.getParameterTypes()).willReturn(new Class<?>[] {Type[].class});
+        given(invocation.getArguments()).willReturn(new Object[] {"hello"});
 
         invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);
         given(invoker.getInterface()).willReturn(DemoService.class);
         AppResponse result = new AppResponse();
         result.setValue("High");
-        given(invoker.invoke(invocation)).willReturn(AsyncRpcResult.newDefaultAsyncResult(result, invocation));
+        AsyncRpcResult defaultAsyncResult = AsyncRpcResult.newDefaultAsyncResult(result, invocation);
+        given(invoker.invoke(invocation)).willReturn(defaultAsyncResult);
         URL url = URL.valueOf("test://test:11/test?group=dubbo&version=1.1&serialization=json");
         given(invoker.getUrl()).willReturn(url);
 
         Result asyncResult = compatibleFilter.invoke(invoker, invocation);
         AppResponse appResponse = (AppResponse) asyncResult.get();
-        compatibleFilter.listener().onResponse(appResponse, invoker, invocation);
+        compatibleFilter.onResponse(appResponse, invoker, invocation);
         assertEquals(Type.High, appResponse.getValue());
     }
 
     @Test
-    public void testInvokerNonJsonEnumSerialization() throws Exception {
-        invocation = mock(Invocation.class);
+    void testInvokerNonJsonEnumSerialization() throws Exception {
+        invocation = mock(RpcInvocation.class);
         given(invocation.getMethodName()).willReturn("enumlength");
-        given(invocation.getParameterTypes()).willReturn(new Class<?>[]{Type[].class});
-        given(invocation.getArguments()).willReturn(new Object[]{"hello"});
+        given(invocation.getParameterTypes()).willReturn(new Class<?>[] {Type[].class});
+        given(invocation.getArguments()).willReturn(new Object[] {"hello"});
 
         invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);
         given(invoker.getInterface()).willReturn(DemoService.class);
         AppResponse result = new AppResponse();
         result.setValue("High");
-        given(invoker.invoke(invocation)).willReturn(AsyncRpcResult.newDefaultAsyncResult(result, invocation));
+        AsyncRpcResult defaultAsyncResult = AsyncRpcResult.newDefaultAsyncResult(result, invocation);
+        given(invoker.invoke(invocation)).willReturn(defaultAsyncResult);
         URL url = URL.valueOf("test://test:11/test?group=dubbo&version=1.1");
         given(invoker.getUrl()).willReturn(url);
 
         Result asyncResult = compatibleFilter.invoke(invoker, invocation);
         AppResponse appResponse = (AppResponse) asyncResult.get();
-        compatibleFilter.listener().onResponse(appResponse, invoker, invocation);
+        compatibleFilter.onResponse(appResponse, invoker, invocation);
         assertEquals(Type.High, appResponse.getValue());
     }
 
     @Test
-    public void testInvokerNonJsonNonPojoSerialization() {
-        invocation = mock(Invocation.class);
+    void testInvokerNonJsonNonPojoSerialization() {
+        invocation = mock(RpcInvocation.class);
         given(invocation.getMethodName()).willReturn("echo");
-        given(invocation.getParameterTypes()).willReturn(new Class<?>[]{String.class});
-        given(invocation.getArguments()).willReturn(new Object[]{"hello"});
+        given(invocation.getParameterTypes()).willReturn(new Class<?>[] {String.class});
+        given(invocation.getArguments()).willReturn(new Object[] {"hello"});
 
         invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);
         given(invoker.getInterface()).willReturn(DemoService.class);
         AppResponse result = new AppResponse();
-        result.setValue(new String[]{"High"});
+        result.setValue(new String[] {"High"});
         given(invoker.invoke(invocation)).willReturn(result);
         URL url = URL.valueOf("test://test:11/test?group=dubbo&version=1.1");
         given(invoker.getUrl()).willReturn(url);
 
         Result filterResult = compatibleFilter.invoke(invoker, invocation);
-        assertArrayEquals(new String[]{"High"}, (String[]) filterResult.getValue());
+        assertArrayEquals(new String[] {"High"}, (String[]) filterResult.getValue());
     }
 
     @Test
-    public void testInvokerNonJsonPojoSerialization() {
-        invocation = mock(Invocation.class);
+    void testInvokerNonJsonPojoSerialization() {
+        invocation = mock(RpcInvocation.class);
         given(invocation.getMethodName()).willReturn("echo");
-        given(invocation.getParameterTypes()).willReturn(new Class<?>[]{String.class});
-        given(invocation.getArguments()).willReturn(new Object[]{"hello"});
+        given(invocation.getParameterTypes()).willReturn(new Class<?>[] {String.class});
+        given(invocation.getArguments()).willReturn(new Object[] {"hello"});
 
         invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);

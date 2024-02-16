@@ -20,66 +20,72 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.registry.NotifyListener;
 import org.apache.dubbo.registry.Registry;
-import org.apache.dubbo.registry.RegistryFactory;
-
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.apache.dubbo.rpc.model.ApplicationModel;
 
 import java.util.Collection;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 /**
  * AbstractRegistryFactoryTest
- *
  */
-public class AbstractRegistryFactoryTest {
+class AbstractRegistryFactoryTest {
 
-    private RegistryFactory registryFactory = new AbstractRegistryFactory() {
+    private AbstractRegistryFactory registryFactory;
 
-        @Override
-        protected Registry createRegistry(final URL url) {
-            return new Registry() {
+    @BeforeEach
+    public void setup() {
+        registryFactory = new AbstractRegistryFactory() {
 
-                public URL getUrl() {
-                    return url;
-                }
+            @Override
+            protected Registry createRegistry(final URL url) {
+                return new Registry() {
 
-                @Override
-                public boolean isAvailable() {
-                    return false;
-                }
+                    public URL getUrl() {
+                        return url;
+                    }
 
-                @Override
-                public void destroy() {
-                }
+                    @Override
+                    public boolean isAvailable() {
+                        return false;
+                    }
 
-                @Override
-                public void register(URL url) {
-                }
+                    @Override
+                    public void destroy() {}
 
-                @Override
-                public void unregister(URL url) {
-                }
+                    @Override
+                    public void register(URL url) {}
 
-                @Override
-                public void subscribe(URL url, NotifyListener listener) {
-                }
+                    @Override
+                    public void unregister(URL url) {}
 
-                @Override
-                public void unsubscribe(URL url, NotifyListener listener) {
-                }
+                    @Override
+                    public void subscribe(URL url, NotifyListener listener) {}
 
-                @Override
-                public List<URL> lookup(URL url) {
-                    return null;
-                }
+                    @Override
+                    public void unsubscribe(URL url, NotifyListener listener) {}
 
-            };
-        }
-    };
+                    @Override
+                    public List<URL> lookup(URL url) {
+                        return null;
+                    }
+                };
+            }
+        };
+        registryFactory.setApplicationModel(ApplicationModel.defaultModel());
+    }
+
+    @AfterEach
+    public void teardown() {
+        ApplicationModel.defaultModel().destroy();
+    }
 
     @Test
-    public void testRegistryFactoryCache() throws Exception {
+    void testRegistryFactoryCache() {
         URL url = URL.valueOf("dubbo://" + NetUtils.getLocalAddress().getHostAddress() + ":2233");
         Registry registry1 = registryFactory.getRegistry(url);
         Registry registry2 = registryFactory.getRegistry(url);
@@ -90,27 +96,48 @@ public class AbstractRegistryFactoryTest {
      * Registration center address `dubbo` does not resolve
      */
     // @Test
-    public void testRegistryFactoryIpCache() throws Exception {
-        Registry registry1 = registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalAddress().getHostName() + ":2233"));
-        Registry registry2 = registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalAddress().getHostAddress() + ":2233"));
+    public void testRegistryFactoryIpCache() {
+        Registry registry1 = registryFactory.getRegistry(
+                URL.valueOf("dubbo://" + NetUtils.getLocalAddress().getHostName() + ":2233"));
+        Registry registry2 = registryFactory.getRegistry(
+                URL.valueOf("dubbo://" + NetUtils.getLocalAddress().getHostAddress() + ":2233"));
         Assertions.assertEquals(registry1, registry2);
     }
 
     @Test
-    public void testRegistryFactoryGroupCache() throws Exception {
-        Registry registry1 = registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":2233?group=aaa"));
-        Registry registry2 = registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":2233?group=bbb"));
+    void testRegistryFactoryGroupCache() {
+        Registry registry1 =
+                registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":2233?group=aaa"));
+        Registry registry2 =
+                registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":2233?group=bbb"));
         Assertions.assertNotSame(registry1, registry2);
     }
 
     @Test
-    public void testDestroyAllRegistries() {
-        Registry registry1 = registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":8888?group=xxx"));
-        Registry registry2 = registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":9999?group=yyy"));
-        Collection<Registry> registries = AbstractRegistryFactory.getRegistries();
+    void testDestroyAllRegistries() {
+        Registry registry1 =
+                registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":8888?group=xxx"));
+        Registry registry2 =
+                registryFactory.getRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":9999?group=yyy"));
+        Registry registry3 =
+                new AbstractRegistry(URL.valueOf("dubbo://" + NetUtils.getLocalHost() + ":2020?group=yyy")) {
+                    @Override
+                    public boolean isAvailable() {
+                        return true;
+                    }
+                };
+
+        RegistryManager registryManager =
+                ApplicationModel.defaultModel().getBeanFactory().getBean(RegistryManager.class);
+
+        Collection<Registry> registries = registryManager.getRegistries();
         Assertions.assertTrue(registries.contains(registry1));
         Assertions.assertTrue(registries.contains(registry2));
-        AbstractRegistryFactory.destroyAll();
+        registry3.destroy();
+        registries = registryManager.getRegistries();
+        Assertions.assertFalse(registries.contains(registry3));
+        registryManager.destroyAll();
+        registries = registryManager.getRegistries();
         Assertions.assertFalse(registries.contains(registry1));
         Assertions.assertFalse(registries.contains(registry2));
     }

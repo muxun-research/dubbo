@@ -16,32 +16,47 @@
  */
 package org.apache.dubbo.common.config;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.utils.ArrayUtils;
 
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_FAILED_LOAD_ENV_VARIABLE;
 
 /**
- *
+ * This is an abstraction specially customized for the sequence Dubbo retrieves properties.
  */
 public class CompositeConfiguration implements Configuration {
-    private Logger logger = LoggerFactory.getLogger(CompositeConfiguration.class);
+    private final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(CompositeConfiguration.class);
 
     /**
      * List holding all the configuration
      */
-    private List<Configuration> configList = new LinkedList<Configuration>();
+    private final List<Configuration> configList = new CopyOnWriteArrayList<>();
 
-    public CompositeConfiguration() {
+    // FIXME, consider change configList to SortedMap to replace this boolean status.
+    private boolean dynamicIncluded;
 
-    }
+    public CompositeConfiguration() {}
 
     public CompositeConfiguration(Configuration... configurations) {
-        if (configurations != null && configurations.length > 0) {
-            Arrays.stream(configurations).filter(config -> !configList.contains(config)).forEach(configList::add);
+        if (ArrayUtils.isNotEmpty(configurations)) {
+            Arrays.stream(configurations)
+                    .filter(config -> !configList.contains(config))
+                    .forEach(configList::add);
         }
+    }
+
+    // FIXME, consider changing configList to SortedMap to replace this boolean status.
+    public boolean isDynamicIncluded() {
+        return dynamicIncluded;
+    }
+
+    public void setDynamicIncluded(boolean dynamicIncluded) {
+        this.dynamicIncluded = dynamicIncluded;
     }
 
     public void addConfiguration(Configuration configuration) {
@@ -61,26 +76,21 @@ public class CompositeConfiguration implements Configuration {
 
     @Override
     public Object getInternalProperty(String key) {
-        Configuration firstMatchingConfiguration = null;
         for (Configuration config : configList) {
             try {
-                if (config.containsKey(key)) {
-                    firstMatchingConfiguration = config;
-                    break;
+                Object value = config.getProperty(key);
+                if (!ConfigurationUtils.isEmptyValue(value)) {
+                    return value;
                 }
             } catch (Exception e) {
-                logger.error("Error when trying to get value for key " + key + " from " + config + ", will continue to try the next one.");
+                logger.error(
+                        CONFIG_FAILED_LOAD_ENV_VARIABLE,
+                        "",
+                        "",
+                        "Error when trying to get value for key " + key + " from " + config + ", "
+                                + "will continue to try the next one.");
             }
         }
-        if (firstMatchingConfiguration != null) {
-            return firstMatchingConfiguration.getProperty(key);
-        } else {
-            return null;
-        }
-    }
-
-    @Override
-    public boolean containsKey(String key) {
-        return configList.stream().anyMatch(c -> c.containsKey(key));
+        return null;
     }
 }

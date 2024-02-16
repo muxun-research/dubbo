@@ -26,12 +26,13 @@ public class AsyncContextImpl implements AsyncContext {
 
     private CompletableFuture<Object> future;
 
-    private RpcContext storedContext;
-    private RpcContext storedServerContext;
+    private final RpcContext.RestoreContext restoreContext;
+    private final ClassLoader restoreClassLoader;
+    private ClassLoader stagedClassLoader;
 
     public AsyncContextImpl() {
-        this.storedContext = RpcContext.getContext();
-        this.storedServerContext = RpcContext.getServerContext();
+        restoreContext = RpcContext.storeContext();
+        restoreClassLoader = Thread.currentThread().getContextClassLoader();
     }
 
     @Override
@@ -44,7 +45,8 @@ public class AsyncContextImpl implements AsyncContext {
                 future.complete(value);
             }
         } else {
-            throw new IllegalStateException("The async response has probably been wrote back by another thread, or the asyncContext has been closed.");
+            throw new IllegalStateException(
+                    "The async response has probably been wrote back by another thread, or the asyncContext has been closed.");
         }
     }
 
@@ -67,9 +69,19 @@ public class AsyncContextImpl implements AsyncContext {
 
     @Override
     public void signalContextSwitch() {
-        RpcContext.restoreContext(storedContext);
-        RpcContext.restoreServerContext(storedServerContext);
-        // Restore any other contexts in here if necessary.
+        RpcContext.restoreContext(restoreContext);
+        if (restoreClassLoader != null) {
+            stagedClassLoader = Thread.currentThread().getContextClassLoader();
+            Thread.currentThread().setContextClassLoader(restoreClassLoader);
+        }
+    }
+
+    @Override
+    public void resetContext() {
+        RpcContext.removeContext();
+        if (stagedClassLoader != null) {
+            Thread.currentThread().setContextClassLoader(restoreClassLoader);
+        }
     }
 
     public CompletableFuture<Object> getInternalFuture() {

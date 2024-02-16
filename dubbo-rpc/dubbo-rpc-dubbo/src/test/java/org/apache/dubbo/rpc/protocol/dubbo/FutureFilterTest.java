@@ -18,11 +18,11 @@ package org.apache.dubbo.rpc.protocol.dubbo;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.rpc.AppResponse;
-import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.RpcInvocation;
+import org.apache.dubbo.rpc.cluster.filter.ClusterFilter;
 import org.apache.dubbo.rpc.protocol.dubbo.filter.FutureFilter;
 import org.apache.dubbo.rpc.protocol.dubbo.support.DemoService;
 
@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.dubbo.config.Constants.ON_THROW_METHOD_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -39,20 +38,20 @@ import static org.mockito.Mockito.mock;
  * EventFilterTest.java
  * TODO rely on callback integration test for now
  */
-public class FutureFilterTest {
+class FutureFilterTest {
     private static RpcInvocation invocation;
-    private Filter eventFilter = new FutureFilter();
+    private ClusterFilter eventFilter = new FutureFilter();
 
     @BeforeAll
     public static void setUp() {
         invocation = new RpcInvocation();
         invocation.setMethodName("echo");
-        invocation.setParameterTypes(new Class<?>[]{Enum.class});
-        invocation.setArguments(new Object[]{"hello"});
+        invocation.setParameterTypes(new Class<?>[] {Enum.class});
+        invocation.setArguments(new Object[] {"hello"});
     }
 
     @Test
-    public void testSyncCallback() {
+    void testSyncCallback() {
         @SuppressWarnings("unchecked")
         Invoker<DemoService> invoker = mock(Invoker.class);
         given(invoker.isAvailable()).willReturn(true);
@@ -68,7 +67,7 @@ public class FutureFilterTest {
     }
 
     @Test
-    public void testSyncCallbackHasException() throws RpcException, Throwable {
+    void testSyncCallbackHasException() throws RpcException, Throwable {
         Assertions.assertThrows(RuntimeException.class, () -> {
             @SuppressWarnings("unchecked")
             Invoker<DemoService> invoker = mock(Invoker.class);
@@ -77,7 +76,7 @@ public class FutureFilterTest {
             AppResponse result = new AppResponse();
             result.setException(new RuntimeException());
             given(invoker.invoke(invocation)).willReturn(result);
-            URL url = URL.valueOf("test://test:11/test?group=dubbo&version=1.1&" + ON_THROW_METHOD_KEY + "=echo");
+            URL url = URL.valueOf("test://test:11/test?group=dubbo&version=1.1&onthrow.method=echo");
             given(invoker.getUrl()).willReturn(url);
 
             eventFilter.invoke(invoker, invocation).recreate();

@@ -21,12 +21,12 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ParametersTest {
+class ParametersTest {
     final String ServiceName = "org.apache.dubbo.rpc.service.GenericService";
     final String ServiceVersion = "1.0.15";
     final String LoadBalance = "lcr";
 
-    public void testMap2Parameters() throws Exception {
+    public void testMap2Parameters() {
         Map<String, String> map = new HashMap<String, String>();
         map.put("name", "org.apache.dubbo.rpc.service.GenericService");
         map.put("version", "1.0.15");

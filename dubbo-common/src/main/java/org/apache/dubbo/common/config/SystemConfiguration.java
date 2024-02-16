@@ -16,25 +16,19 @@
  */
 package org.apache.dubbo.common.config;
 
+import java.util.Map;
 
 /**
- * FIXME: is this really necessary? PropertiesConfiguration should have already covered this:
- * @see PropertiesConfiguration
- * @See ConfigUtils#getProperty(String)
+ * Configuration from system properties
  */
-public class SystemConfiguration extends AbstractPrefixConfiguration {
-
-    public SystemConfiguration(String prefix, String id) {
-        super(prefix, id);
-    }
-
-    public SystemConfiguration() {
-        this(null, null);
-    }
+public class SystemConfiguration implements Configuration {
 
     @Override
     public Object getInternalProperty(String key) {
         return System.getProperty(key);
     }
 
+    public Map<String, String> getProperties() {
+        return (Map) System.getProperties();
+    }
 }

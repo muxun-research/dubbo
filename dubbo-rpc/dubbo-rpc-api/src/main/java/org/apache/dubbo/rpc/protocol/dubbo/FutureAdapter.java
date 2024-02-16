@@ -26,11 +26,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * FutureAdapter
+ * This is the type of the Future instance users get in an async call:
+ * 1. unwrap AppResponse in appResponseFuture and convert to plain biz result represented by FutureAdapter.
+ * 2. customized behaviors meaningful for RPC, for example, {@link #cancel(boolean)}
  */
 public class FutureAdapter<V> extends CompletableFuture<V> {
 
-    private CompletableFuture<AppResponse> appResponseFuture;
+    private final CompletableFuture<AppResponse> appResponseFuture;
 
     public FutureAdapter(CompletableFuture<AppResponse> future) {
         this.appResponseFuture = future;
@@ -53,6 +55,10 @@ public class FutureAdapter<V> extends CompletableFuture<V> {
     // TODO figure out the meaning of cancel in DefaultFuture.
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
+        //        Invocation invocation = invocationSoftReference.get();
+        //        if (invocation != null) {
+        //            invocation.getInvoker().invoke(cancel);
+        //        }
         return appResponseFuture.cancel(mayInterruptIfRunning);
     }
 
@@ -88,9 +94,5 @@ public class FutureAdapter<V> extends CompletableFuture<V> {
         } catch (Throwable e) {
             throw new RpcException(e);
         }
-    }
-
-    public CompletableFuture<AppResponse> getAppResponseFuture() {
-        return appResponseFuture;
     }
 }

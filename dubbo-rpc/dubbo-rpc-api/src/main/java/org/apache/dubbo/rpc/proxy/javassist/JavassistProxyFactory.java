@@ -19,41 +19,114 @@ package org.apache.dubbo.rpc.proxy.javassist;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.bytecode.Proxy;
 import org.apache.dubbo.common.bytecode.Wrapper;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.proxy.AbstractProxyFactory;
 import org.apache.dubbo.rpc.proxy.AbstractProxyInvoker;
 import org.apache.dubbo.rpc.proxy.InvokerInvocationHandler;
+import org.apache.dubbo.rpc.proxy.jdk.JdkProxyFactory;
+
+import java.util.Arrays;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROXY_FAILED;
 
 /**
  * JavaassistRpcProxyFactory
  * Javaassist RPC代理工厂
  */
 public class JavassistProxyFactory extends AbstractProxyFactory {
+    private static final ErrorTypeAwareLogger logger =
+            LoggerFactory.getErrorTypeAwareLogger(JavassistProxyFactory.class);
+    private final JdkProxyFactory jdkProxyFactory = new JdkProxyFactory();
 
-	/**
-	 * 获取proxy对象
-	 */
-	@Override
-	@SuppressWarnings("unchecked")
-	public <T> T getProxy(Invoker<T> invoker, Class<?>[] interfaces) {
-		// proxy和开发者代码解耦
-		return (T) Proxy.getProxy(interfaces).newInstance(new InvokerInvocationHandler(invoker));
-	}
+    /**
+     * 获取proxy对象
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T getProxy(Invoker<T> invoker, Class<?>[] interfaces) {
+        try {
+            // proxy和开发者代码解耦
+            return (T) Proxy.getProxy(interfaces).newInstance(new InvokerInvocationHandler(invoker));
+        } catch (Throwable fromJavassist) {
+            // try fall back to JDK proxy factory
+            try {
+                T proxy = jdkProxyFactory.getProxy(invoker, interfaces);
+                logger.error(
+                        PROXY_FAILED,
+                        "",
+                        "",
+                        "Failed to generate proxy by Javassist failed. Fallback to use JDK proxy success. "
+                                + "Interfaces: " + Arrays.toString(interfaces),
+                        fromJavassist);
+                return proxy;
+            } catch (Throwable fromJdk) {
+                logger.error(
+                        PROXY_FAILED,
+                        "",
+                        "",
+                        "Failed to generate proxy by Javassist failed. Fallback to use JDK proxy is also failed. "
+                                + "Interfaces: " + Arrays.toString(interfaces) + " Javassist Error.",
+                        fromJavassist);
+                logger.error(
+                        PROXY_FAILED,
+                        "",
+                        "",
+                        "Failed to generate proxy by Javassist failed. Fallback to use JDK proxy is also failed. "
+                                + "Interfaces: " + Arrays.toString(interfaces) + " JDK Error.",
+                        fromJdk);
+                throw fromJavassist;
+            }
+        }
+    }
 
     @Override
     public <T> Invoker<T> getInvoker(T proxy, Class<T> type, URL url) {
-        // TODO Wrapper cannot handle this scenario correctly: the classname contains '$'
-		// Wrapper类无法处理带"$"的类名，故带有"$"的类名需要使用指定类的类型
-        final Wrapper wrapper = Wrapper.getWrapper(proxy.getClass().getName().indexOf('$') < 0 ? proxy.getClass() : type);
-        return new AbstractProxyInvoker<T>(proxy, type, url) {
-            @Override
-            protected Object doInvoke(T proxy, String methodName,
-                                      Class<?>[] parameterTypes,
-                                      Object[] arguments) throws Throwable {
-				// 调用wrapper的invokeMethod()方法，完成方法调用
-                return wrapper.invokeMethod(proxy, methodName, parameterTypes, arguments);
+        try {
+            // TODO Wrapper cannot handle this scenario correctly: the classname contains '$'
+            // Wrapper类无法处理带"$"的类名，故带有"$"的类名需要使用指定类的类型
+            final Wrapper wrapper =
+                    Wrapper.getWrapper(proxy.getClass().getName().indexOf('$') < 0 ? proxy.getClass() : type);
+            return new AbstractProxyInvoker<T>(proxy, type, url) {
+                @Override
+                protected Object doInvoke(T proxy, String methodName, Class<?>[] parameterTypes, Object[] arguments)
+                        throws Throwable {
+                    return wrapper.invokeMethod(proxy, methodName, parameterTypes, arguments);
+                }
+            };
+        } catch (Throwable fromJavassist) {
+            // try fall back to JDK proxy factory
+            try {
+                // 调用wrapper的invokeMethod()方法，完成方法调用
+                Invoker<T> invoker = jdkProxyFactory.getInvoker(proxy, type, url);
+                logger.error(
+                        PROXY_FAILED,
+                        "",
+                        "",
+                        "Failed to generate invoker by Javassist failed. Fallback to use JDK proxy success. "
+                                + "Interfaces: " + type,
+                        fromJavassist);
+                // log out error
+                return invoker;
+            } catch (Throwable fromJdk) {
+                logger.error(
+                        PROXY_FAILED,
+                        "",
+                        "",
+                        "Failed to generate invoker by Javassist failed. Fallback to use JDK proxy is also failed. "
+                                + "Interfaces: " + type + " Javassist Error.",
+                        fromJavassist);
+                logger.error(
+                        PROXY_FAILED,
+                        "",
+                        "",
+                        "Failed to generate invoker by Javassist failed. Fallback to use JDK proxy is also failed. "
+                                + "Interfaces: " + type + " JDK Error.",
+                        fromJdk);
+                throw fromJavassist;
             }
-        };
+        }
     }
 
 }

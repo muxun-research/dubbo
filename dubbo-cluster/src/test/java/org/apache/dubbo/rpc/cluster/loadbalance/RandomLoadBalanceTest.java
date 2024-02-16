@@ -3,7 +3,7 @@
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License")); you may not use this file except in compliance with
+ * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -19,23 +19,25 @@ package org.apache.dubbo.rpc.cluster.loadbalance;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcStatus;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 /**
  * RandomLoadBalance Test
  */
-public class RandomLoadBalanceTest extends LoadBalanceBaseTest {
+class RandomLoadBalanceTest extends LoadBalanceBaseTest {
     @Test
-    public void testRandomLoadBalanceSelect() {
+    void testRandomLoadBalanceSelect() {
         int runs = 1000;
         Map<Invoker, AtomicLong> counter = getInvokeCounter(runs, RandomLoadBalance.NAME);
         for (Map.Entry<Invoker, AtomicLong> entry : counter.entrySet()) {
             Long count = entry.getValue().get();
-            Assertions.assertTrue(Math.abs(count - runs / (0f + invokers.size())) < runs / (0f + invokers.size()), "abs diff should < avg");
+            Assertions.assertTrue(
+                    Math.abs(count - runs / (0f + invokers.size())) < runs / (0f + invokers.size()),
+                    "abs diff should < avg");
         }
 
         for (int i = 0; i < 5; i++) {
@@ -55,7 +57,7 @@ public class RandomLoadBalanceTest extends LoadBalanceBaseTest {
     }
 
     @Test
-    public void testSelectByWeight() {
+    void testSelectByWeight() {
         int sumInvoker1 = 0;
         int sumInvoker2 = 0;
         int sumInvoker3 = 0;
@@ -84,5 +86,4 @@ public class RandomLoadBalanceTest extends LoadBalanceBaseTest {
         System.out.println(sumInvoker3);
         Assertions.assertEquals(sumInvoker1 + sumInvoker2 + sumInvoker3, loop, "select failed!");
     }
-
 }

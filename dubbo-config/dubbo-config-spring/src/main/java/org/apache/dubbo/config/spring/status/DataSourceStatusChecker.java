@@ -17,22 +17,24 @@
 package org.apache.dubbo.config.spring.status;
 
 import org.apache.dubbo.common.extension.Activate;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.status.Status;
 import org.apache.dubbo.common.status.StatusChecker;
 import org.apache.dubbo.common.utils.CollectionUtils;
-import org.apache.dubbo.config.spring.extension.SpringExtensionFactory;
-
-import org.springframework.context.ApplicationContext;
+import org.apache.dubbo.config.spring.extension.SpringExtensionInjector;
+import org.apache.dubbo.rpc.model.ApplicationModel;
 
 import javax.sql.DataSource;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+
+import org.springframework.context.ApplicationContext;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_WARN_STATUS_CHECKER;
 
 /**
  * DataSourceStatusChecker
@@ -40,19 +42,33 @@ import java.util.Optional;
 @Activate
 public class DataSourceStatusChecker implements StatusChecker {
 
-    private static final Logger logger = LoggerFactory.getLogger(DataSourceStatusChecker.class);
+    private static final ErrorTypeAwareLogger logger =
+            LoggerFactory.getErrorTypeAwareLogger(DataSourceStatusChecker.class);
+
+    private ApplicationModel applicationModel;
+
+    private ApplicationContext applicationContext;
+
+    public DataSourceStatusChecker(ApplicationModel applicationModel) {
+        this.applicationModel = applicationModel;
+    }
+
+    public DataSourceStatusChecker(ApplicationContext context) {
+        this.applicationContext = context;
+    }
 
     @Override
     public Status check() {
-        Optional<ApplicationContext> context =
-                SpringExtensionFactory.getContexts().stream().filter(Objects::nonNull).findFirst();
+        if (applicationContext == null) {
+            SpringExtensionInjector springExtensionInjector = SpringExtensionInjector.get(applicationModel);
+            applicationContext = springExtensionInjector.getContext();
+        }
 
-        if (!context.isPresent()) {
+        if (applicationContext == null) {
             return new Status(Status.Level.UNKNOWN);
         }
 
-        Map<String, DataSource> dataSources =
-                context.get().getBeansOfType(DataSource.class, false, false);
+        Map<String, DataSource> dataSources = applicationContext.getBeansOfType(DataSource.class, false, false);
         if (CollectionUtils.isEmptyMap(dataSources)) {
             return new Status(Status.Level.UNKNOWN);
         }
@@ -73,17 +89,16 @@ public class DataSourceStatusChecker implements StatusChecker {
                     }
                 }
                 buf.append(metaData.getURL());
-                buf.append("(");
+                buf.append('(');
                 buf.append(metaData.getDatabaseProductName());
-                buf.append("-");
+                buf.append('-');
                 buf.append(metaData.getDatabaseProductVersion());
-                buf.append(")");
+                buf.append(')');
             } catch (Throwable e) {
-                logger.warn(e.getMessage(), e);
+                logger.warn(CONFIG_WARN_STATUS_CHECKER, "", "", e.getMessage(), e);
                 return new Status(level, e.getMessage());
             }
         }
         return new Status(level, buf.toString());
     }
-
 }

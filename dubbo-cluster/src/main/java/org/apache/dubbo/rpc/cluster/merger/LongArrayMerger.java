@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.rpc.cluster.merger;
 
 import org.apache.dubbo.common.utils.ArrayUtils;
 import org.apache.dubbo.rpc.cluster.Merger;
+
+import java.util.Arrays;
+import java.util.Objects;
 
 public class LongArrayMerger implements Merger<long[]> {
 
@@ -27,21 +29,9 @@ public class LongArrayMerger implements Merger<long[]> {
         if (ArrayUtils.isEmpty(items)) {
             return new long[0];
         }
-        int total = 0;
-        for (long[] array : items) {
-            if (array != null) {
-                total += array.length;
-            }
-        }
-        long[] result = new long[total];
-        int index = 0;
-        for (long[] array : items) {
-            if (array != null) {
-                for (long item : array) {
-                    result[index++] = item;
-                }
-            }
-        }
-        return result;
+        return Arrays.stream(items)
+                .filter(Objects::nonNull)
+                .flatMapToLong(Arrays::stream)
+                .toArray();
     }
 }

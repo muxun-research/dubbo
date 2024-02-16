@@ -17,17 +17,19 @@
 package org.apache.dubbo.config.spring.status;
 
 import org.apache.dubbo.common.extension.Activate;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.status.Status;
 import org.apache.dubbo.common.status.StatusChecker;
-import org.apache.dubbo.config.spring.extension.SpringExtensionFactory;
+import org.apache.dubbo.config.spring.extension.SpringExtensionInjector;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+
+import java.lang.reflect.Method;
 
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.Lifecycle;
-import org.springframework.web.context.support.GenericWebApplicationContext;
 
-import java.lang.reflect.Method;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_WARN_STATUS_CHECKER;
 
 /**
  * SpringStatusChecker
@@ -35,31 +37,35 @@ import java.lang.reflect.Method;
 @Activate
 public class SpringStatusChecker implements StatusChecker {
 
-    private static final Logger logger = LoggerFactory.getLogger(SpringStatusChecker.class);
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(SpringStatusChecker.class);
+
+    private ApplicationModel applicationModel;
+
+    private ApplicationContext applicationContext;
+
+    public SpringStatusChecker(ApplicationModel applicationModel) {
+        this.applicationModel = applicationModel;
+    }
+
+    public SpringStatusChecker(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
 
     @Override
     public Status check() {
-        ApplicationContext context = null;
-        for (ApplicationContext c : SpringExtensionFactory.getContexts()) {
-            // [Issue] SpringStatusChecker execute errors on non-XML Spring configuration
-            // issue : https://github.com/apache/dubbo/issues/3615
-            if(c instanceof GenericWebApplicationContext) { // ignore GenericXmlApplicationContext
-                continue;
-            }
 
-            if (c != null) {
-                context = c;
-                break;
-            }
+        if (applicationContext == null && applicationModel != null) {
+            SpringExtensionInjector springExtensionInjector = SpringExtensionInjector.get(applicationModel);
+            applicationContext = springExtensionInjector.getContext();
         }
 
-        if (context == null) {
+        if (applicationContext == null) {
             return new Status(Status.Level.UNKNOWN);
         }
 
         Status.Level level;
-        if (context instanceof Lifecycle) {
-            if (((Lifecycle) context).isRunning()) {
+        if (applicationContext instanceof Lifecycle) {
+            if (((Lifecycle) applicationContext).isRunning()) {
                 level = Status.Level.OK;
             } else {
                 level = Status.Level.ERROR;
@@ -69,7 +75,7 @@ public class SpringStatusChecker implements StatusChecker {
         }
         StringBuilder buf = new StringBuilder();
         try {
-            Class<?> cls = context.getClass();
+            Class<?> cls = applicationContext.getClass();
             Method method = null;
             while (cls != null && method == null) {
                 try {
@@ -82,20 +88,23 @@ public class SpringStatusChecker implements StatusChecker {
                 if (!method.isAccessible()) {
                     method.setAccessible(true);
                 }
-                String[] configs = (String[]) method.invoke(context, new Object[0]);
+                String[] configs = (String[]) method.invoke(applicationContext, new Object[0]);
                 if (configs != null && configs.length > 0) {
                     for (String config : configs) {
                         if (buf.length() > 0) {
-                            buf.append(",");
+                            buf.append(',');
                         }
                         buf.append(config);
                     }
                 }
             }
         } catch (Throwable t) {
-            logger.warn(t.getMessage(), t);
+            if (t.getCause() instanceof UnsupportedOperationException) {
+                logger.debug(t.getMessage(), t);
+            } else {
+                logger.warn(CONFIG_WARN_STATUS_CHECKER, "", "", t.getMessage(), t);
+            }
         }
         return new Status(level, buf.toString());
     }
-
 }

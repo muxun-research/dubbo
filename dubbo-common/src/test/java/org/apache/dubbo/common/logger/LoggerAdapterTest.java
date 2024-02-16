@@ -27,42 +27,45 @@ import org.apache.dubbo.common.logger.log4j2.Log4j2LoggerAdapter;
 import org.apache.dubbo.common.logger.slf4j.Slf4jLogger;
 import org.apache.dubbo.common.logger.slf4j.Slf4jLoggerAdapter;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.stream.Stream;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.stream.Stream;
-
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class LoggerAdapterTest {
+class LoggerAdapterTest {
     static Stream<Arguments> data() {
         return Stream.of(
                 Arguments.of(JclLoggerAdapter.class, JclLogger.class),
                 Arguments.of(JdkLoggerAdapter.class, JdkLogger.class),
                 Arguments.of(Log4jLoggerAdapter.class, Log4jLogger.class),
                 Arguments.of(Slf4jLoggerAdapter.class, Slf4jLogger.class),
-                Arguments.of(Log4j2LoggerAdapter.class, Log4j2Logger.class)
-        );
+                Arguments.of(Log4j2LoggerAdapter.class, Log4j2Logger.class));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void testGetLogger(Class<? extends LoggerAdapter> loggerAdapterClass, Class<? extends Logger> loggerClass) throws IllegalAccessException, InstantiationException {
-        LoggerAdapter loggerAdapter = loggerAdapterClass.newInstance();
+    void testGetLogger(Class<? extends LoggerAdapter> loggerAdapterClass, Class<? extends Logger> loggerClass)
+            throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
+        LoggerAdapter loggerAdapter =
+                loggerAdapterClass.getDeclaredConstructor().newInstance();
         Logger logger = loggerAdapter.getLogger(this.getClass());
         assertThat(logger.getClass().isAssignableFrom(loggerClass), is(true));
 
         logger = loggerAdapter.getLogger(this.getClass().getSimpleName());
         assertThat(logger.getClass().isAssignableFrom(loggerClass), is(true));
-
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void testLevel(Class<? extends LoggerAdapter> loggerAdapterClass) throws IllegalAccessException, InstantiationException {
-        LoggerAdapter loggerAdapter = loggerAdapterClass.newInstance();
+    void testLevel(Class<? extends LoggerAdapter> loggerAdapterClass)
+            throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
+        LoggerAdapter loggerAdapter =
+                loggerAdapterClass.getDeclaredConstructor().newInstance();
         for (Level targetLevel : Level.values()) {
             loggerAdapter.setLevel(targetLevel);
             assertThat(loggerAdapter.getLevel(), is(targetLevel));

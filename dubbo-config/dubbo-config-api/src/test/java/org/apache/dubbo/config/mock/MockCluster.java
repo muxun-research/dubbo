@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,7 +23,7 @@ import org.apache.dubbo.rpc.cluster.Directory;
 
 public class MockCluster implements Cluster {
     @Override
-    public <T> Invoker<T> join(Directory<T> directory) throws RpcException {
+    public <T> Invoker<T> join(Directory<T> directory, boolean buildFilterChain) throws RpcException {
         return null;
     }
 }

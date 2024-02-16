@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.remoting.transport;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.ChannelHandler;
@@ -26,50 +25,53 @@ import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.exchange.Request;
 import org.apache.dubbo.remoting.exchange.Response;
 
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.TRANSPORT_FAILED_DECODE;
+
 /**
  * 解码ChannelHandler
  */
 public class DecodeHandler extends AbstractChannelHandlerDelegate {
 
-	private static final Logger log = LoggerFactory.getLogger(DecodeHandler.class);
+    private static final ErrorTypeAwareLogger log = LoggerFactory.getErrorTypeAwareLogger(DecodeHandler.class);
 
-	public DecodeHandler(ChannelHandler handler) {
-		super(handler);
-	}
+    public DecodeHandler(ChannelHandler handler) {
+        super(handler);
+    }
 
-	@Override
-	public void received(Channel channel, Object message) throws RemotingException {
-		// 根据消息的不同类型对消息的不同数据进行解码
-		if (message instanceof Decodeable) {
-			decode(message);
-		}
+    @Override
+    public void received(Channel channel, Object message) throws RemotingException {
+        // 根据消息的不同类型对消息的不同数据进行解码
+        if (message instanceof Decodeable) {
+            decode(message);
+        }
 
-		if (message instanceof Request) {
-			decode(((Request) message).getData());
-		}
+        if (message instanceof Request) {
+            decode(((Request) message).getData());
+        }
 
-		if (message instanceof Response) {
-			decode(((Response) message).getResult());
-		}
-		// 解码后再调用ChannelHandler#received()
-		// 将消息交给委托的Handler继续处理
-		// 通过组合模式，实现功能的叠加
-		handler.received(channel, message);
-	}
+        if (message instanceof Response) {
+            decode(((Response) message).getResult());
+        }
+        // 解码后再调用ChannelHandler#received()
+        // 将消息交给委托的Handler继续处理
+        // 通过组合模式，实现功能的叠加
+        handler.received(channel, message);
+    }
 
-	private void decode(Object message) {
-		if (message instanceof Decodeable) {
-			try {
-				((Decodeable) message).decode();
-				if (log.isDebugEnabled()) {
-					log.debug("Decode decodeable message " + message.getClass().getName());
-				}
-			} catch (Throwable e) {
-				if (log.isWarnEnabled()) {
-					log.warn("Call Decodeable.decode failed: " + e.getMessage(), e);
-				}
-			} // ~ end of catch
-		} // ~ end of if
-	} // ~ end of method decode
+    private void decode(Object message) {
+        if (!(message instanceof Decodeable)) {
+            return;
+        }
 
+        try {
+            ((Decodeable) message).decode();
+            if (log.isDebugEnabled()) {
+                log.debug("Decode decodeable message " + message.getClass().getName());
+            }
+        } catch (Throwable e) {
+            if (log.isWarnEnabled()) {
+                log.warn(TRANSPORT_FAILED_DECODE, "", "", "Call Decodeable.decode failed: " + e.getMessage(), e);
+            }
+        }
+    }
 }

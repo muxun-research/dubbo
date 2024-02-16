@@ -41,7 +41,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
      */
     private static final int DEFAULT_EXPIRATION_INTERVAL = 1;
 
-    private static AtomicInteger expireCount = new AtomicInteger(1);
+    private static final AtomicInteger expireCount = new AtomicInteger(1);
 
     private final ConcurrentHashMap<K, ExpiryObject> delegateMap;
 
@@ -84,6 +84,12 @@ public class ExpiringMap<K, V> implements Map<K, V> {
     public V get(Object key) {
         ExpiryObject object = delegateMap.get(key);
         if (object != null) {
+            long timeIdle = System.currentTimeMillis() - object.getLastAccessTime();
+            int timeToLive = expireThread.getTimeToLive();
+            if (timeToLive > 0 && timeIdle >= timeToLive * 1000L) {
+                delegateMap.remove(object.getKey());
+                return null;
+            }
             object.setLastAccessTime(System.currentTimeMillis());
             return object.getValue();
         }
@@ -137,6 +143,9 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
     @Override
     public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
         return delegateMap.equals(obj);
     }
 
@@ -185,10 +194,9 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
     @Override
     public String toString() {
-        return "ExpiringMap{" +
-                "delegateMap=" + delegateMap.toString() +
-                ", expireThread=" + expireThread.toString() +
-                '}';
+        return "ExpiringMap{" + "delegateMap="
+                + delegateMap.toString() + ", expireThread="
+                + expireThread.toString() + '}';
     }
 
     /**
@@ -226,6 +234,9 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
         @Override
         public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
             return value.equals(obj);
         }
 
@@ -236,11 +247,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
         @Override
         public String toString() {
-            return "ExpiryObject{" +
-                    "key=" + key +
-                    ", value=" + value +
-                    ", lastAccessTime=" + lastAccessTime +
-                    '}';
+            return "ExpiryObject{" + "key=" + key + ", value=" + value + ", lastAccessTime=" + lastAccessTime + '}';
         }
     }
 
@@ -255,12 +262,11 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
         @Override
         public String toString() {
-            return "ExpireThread{" +
-                    ", timeToLiveMillis=" + timeToLiveMillis +
-                    ", expirationIntervalMillis=" + expirationIntervalMillis +
-                    ", running=" + running +
-                    ", expirerThread=" + expirerThread +
-                    '}';
+            return "ExpireThread{" + ", timeToLiveMillis="
+                    + timeToLiveMillis + ", expirationIntervalMillis="
+                    + expirationIntervalMillis + ", running="
+                    + running + ", expirerThread="
+                    + expirerThread + '}';
         }
 
         public ExpireThread() {
@@ -282,10 +288,10 @@ public class ExpiringMap<K, V> implements Map<K, V> {
 
         private void processExpires() {
             long timeNow = System.currentTimeMillis();
+            if (timeToLiveMillis <= 0) {
+                return;
+            }
             for (ExpiryObject o : delegateMap.values()) {
-                if (timeToLiveMillis <= 0) {
-                    continue;
-                }
                 long timeIdle = timeNow - o.getLastAccessTime();
                 if (timeIdle >= timeToLiveMillis) {
                     delegateMap.remove(o.getKey());
@@ -307,7 +313,7 @@ public class ExpiringMap<K, V> implements Map<K, V> {
          * start thread
          */
         public void startExpiryIfNotStarted() {
-            if (running) {
+            if (running && timeToLiveMillis <= 0) {
                 return;
             }
             startExpiring();
@@ -369,6 +375,3 @@ public class ExpiringMap<K, V> implements Map<K, V> {
         }
     }
 }
-
-
-

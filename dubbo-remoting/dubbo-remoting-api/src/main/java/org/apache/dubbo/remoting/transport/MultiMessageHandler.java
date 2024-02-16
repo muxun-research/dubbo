@@ -16,10 +16,14 @@
  */
 package org.apache.dubbo.remoting.transport;
 
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.exchange.support.MultiMessage;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.INTERNAL_ERROR;
 
 /**
  * 多消息处理ChannelHandler
@@ -27,6 +31,9 @@ import org.apache.dubbo.remoting.exchange.support.MultiMessage;
  * @see MultiMessage
  */
 public class MultiMessageHandler extends AbstractChannelHandlerDelegate {
+
+    protected static final ErrorTypeAwareLogger logger =
+            LoggerFactory.getErrorTypeAwareLogger(MultiMessageHandler.class);
 
     public MultiMessageHandler(ChannelHandler handler) {
         super(handler);
@@ -39,7 +46,26 @@ public class MultiMessageHandler extends AbstractChannelHandlerDelegate {
         if (message instanceof MultiMessage) {
             MultiMessage list = (MultiMessage) message;
             for (Object obj : list) {
-                handler.received(channel, obj);
+                try {
+                    handler.received(channel, obj);
+                } catch (Throwable t) {
+                    logger.error(
+                            INTERNAL_ERROR,
+                            "unknown error in remoting module",
+                            "",
+                            "MultiMessageHandler received fail.",
+                            t);
+                    try {
+                        handler.caught(channel, t);
+                    } catch (Throwable t1) {
+                        logger.error(
+                                INTERNAL_ERROR,
+                                "unknown error in remoting module",
+                                "",
+                                "MultiMessageHandler caught fail.",
+                                t1);
+                    }
+                }
             }
         } else {
 			// 否则仅处理这一条消息

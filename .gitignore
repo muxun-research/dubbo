@@ -1,11 +1,11 @@
 # maven ignore
 target/
 *.jar
-!.mvn/wrapper/*
 *.war
 *.zip
 *.tar
 *.tar.gz
+.flattened-pom.xml
 
 # eclipse ignore
 .settings/
@@ -17,6 +17,9 @@ target/
 *.ipr
 *.iml
 *.iws
+
+# visual-studio-code ignore
+.vscode/
 
 # temp ignore
 *.log
@@ -30,8 +33,20 @@ target/
 Thumbs.db
 *.orig
 
-# flatten ignore
-.flattened-pom.xml
-
 # license check result
 license-list
+
+# grpc compiler
+compiler/gradle.properties
+compiler/build/*
+compiler/.gradle/*
+
+# protobuf
+dubbo-serialization/dubbo-serialization-protobuf/build/*
+dubbo-demo/dubbo-demo-triple/build/*
+
+# global registry center
+.tmp
+
+.git.exec.error
+

@@ -14,9 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.monitor;
 
+/**
+ * @deprecated After metrics config is refactored.
+ * This class should no longer use and will be deleted in the future.
+ */
+@Deprecated
 public interface MetricsService {
     String getMetricsByGroup(String group);
 }

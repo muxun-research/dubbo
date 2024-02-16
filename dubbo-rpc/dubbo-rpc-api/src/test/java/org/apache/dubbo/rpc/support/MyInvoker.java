@@ -24,6 +24,8 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * MockInvoker.java
  */
@@ -32,6 +34,7 @@ public class MyInvoker<T> implements Invoker<T> {
     URL url;
     Class<T> type;
     boolean hasException = false;
+    boolean destroyed = false;
 
     public MyInvoker(URL url) {
         this.url = url;
@@ -67,16 +70,20 @@ public class MyInvoker<T> implements Invoker<T> {
             result.setException(new RuntimeException("mocked exception"));
         }
 
-        return AsyncRpcResult.newDefaultAsyncResult(result, invocation);
+        return new AsyncRpcResult(CompletableFuture.completedFuture(result), invocation);
     }
 
     @Override
     public void destroy() {
+        destroyed = true;
+    }
+
+    public boolean isDestroyed() {
+        return destroyed;
     }
 
     @Override
     public String toString() {
         return "MyInvoker.toString()";
     }
-
 }

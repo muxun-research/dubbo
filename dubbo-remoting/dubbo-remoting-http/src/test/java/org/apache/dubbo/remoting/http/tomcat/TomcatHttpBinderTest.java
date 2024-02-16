@@ -17,39 +17,44 @@
 package org.apache.dubbo.remoting.http.tomcat;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.url.component.ServiceConfigURL;
 import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.remoting.Constants;
 import org.apache.dubbo.remoting.http.HttpHandler;
 import org.apache.dubbo.remoting.http.HttpServer;
 
-import org.apache.http.client.fluent.Request;
-import org.junit.jupiter.api.Test;
-
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
+
+import org.apache.http.client.fluent.Request;
+import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
-public class TomcatHttpBinderTest {
+class TomcatHttpBinderTest {
     @Test
-    public void shouldAbleHandleRequestForTomcatBinder() throws Exception {
+    void shouldAbleHandleRequestForTomcatBinder() throws Exception {
         int port = NetUtils.getAvailablePort();
-        URL url = new URL("http", "localhost", port,
-                new String[]{Constants.BIND_PORT_KEY, String.valueOf(port)});
+        URL url = new ServiceConfigURL(
+                "http", "localhost", port, new String[] {Constants.BIND_PORT_KEY, String.valueOf(port)});
 
-        HttpServer httpServer = new TomcatHttpBinder().bind(url, new HttpHandler() {
-            @Override
-            public void handle(HttpServletRequest request, HttpServletResponse response) throws IOException {
-                response.getWriter().write("Tomcat");
-            }
-        });
+        HttpServer httpServer = new TomcatHttpBinder()
+                .bind(url, new HttpHandler<HttpServletRequest, HttpServletResponse>() {
+                    @Override
+                    public void handle(HttpServletRequest request, HttpServletResponse response) throws IOException {
+                        response.getWriter().write("Tomcat");
+                    }
+                });
 
-        String response = Request.Get(url.toJavaURL().toURI()).execute().returnContent().asString();
+        String response =
+                Request.Get(url.toJavaURL().toURI()).execute().returnContent().asString();
 
         assertThat(response, is("Tomcat"));
 
         httpServer.close();
+        assertThat(NetUtils.isPortInUsed(port), is(false));
     }
 }

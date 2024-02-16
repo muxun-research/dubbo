@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.remoting.buffer;
 
 import java.nio.ByteBuffer;
@@ -23,19 +22,19 @@ public final class ChannelBuffers {
 
     public static final ChannelBuffer EMPTY_BUFFER = new HeapChannelBuffer(0);
 
-    private ChannelBuffers() {
-    }
+    public static final int DEFAULT_CAPACITY = 256;
+
+    private ChannelBuffers() {}
 
     public static ChannelBuffer dynamicBuffer() {
-        return dynamicBuffer(256);
+        return dynamicBuffer(DEFAULT_CAPACITY);
     }
 
     public static ChannelBuffer dynamicBuffer(int capacity) {
         return new DynamicChannelBuffer(capacity);
     }
 
-    public static ChannelBuffer dynamicBuffer(int capacity,
-                                              ChannelBufferFactory factory) {
+    public static ChannelBuffer dynamicBuffer(int capacity, ChannelBufferFactory factory) {
         return new DynamicChannelBuffer(capacity, factory);
     }
 
@@ -84,8 +83,7 @@ public final class ChannelBuffers {
             return EMPTY_BUFFER;
         }
 
-        ChannelBuffer buffer = new ByteBufferBackedChannelBuffer(
-                ByteBuffer.allocateDirect(capacity));
+        ChannelBuffer buffer = new ByteBufferBackedChannelBuffer(ByteBuffer.allocateDirect(capacity));
         buffer.clear();
         return buffer;
     }
@@ -112,6 +110,46 @@ public final class ChannelBuffers {
         return true;
     }
 
+    // prefix
+    public static boolean prefixEquals(ChannelBuffer bufferA, ChannelBuffer bufferB, int count) {
+        final int aLen = bufferA.readableBytes();
+        final int bLen = bufferB.readableBytes();
+        if (aLen < count || bLen < count) {
+            return false;
+        }
+
+        int aIndex = bufferA.readerIndex();
+        int bIndex = bufferB.readerIndex();
+
+        for (int i = count; i > 0; i--) {
+            if (bufferA.getByte(aIndex) != bufferB.getByte(bIndex)) {
+                return false;
+            }
+            aIndex++;
+            bIndex++;
+        }
+
+        return true;
+    }
+
+    public static int hasCode(ChannelBuffer buffer) {
+        final int aLen = buffer.readableBytes();
+        final int byteCount = aLen & 7;
+
+        int hashCode = 1;
+        int arrayIndex = buffer.readerIndex();
+
+        for (int i = byteCount; i > 0; i--) {
+            hashCode = 31 * hashCode + buffer.getByte(arrayIndex++);
+        }
+
+        if (hashCode == 0) {
+            hashCode = 1;
+        }
+
+        return hashCode;
+    }
+
     public static int compare(ChannelBuffer bufferA, ChannelBuffer bufferB) {
         final int aLen = bufferA.readableBytes();
         final int bLen = bufferB.readableBytes();
@@ -134,5 +172,4 @@ public final class ChannelBuffers {
 
         return aLen - bLen;
     }
-
 }

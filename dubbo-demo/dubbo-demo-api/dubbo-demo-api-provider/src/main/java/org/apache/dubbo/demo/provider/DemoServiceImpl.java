@@ -19,6 +19,8 @@ package org.apache.dubbo.demo.provider;
 import org.apache.dubbo.demo.DemoService;
 import org.apache.dubbo.rpc.RpcContext;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,8 +29,14 @@ public class DemoServiceImpl implements DemoService {
 
     @Override
     public String sayHello(String name) {
-        logger.info("Hello " + name + ", request from consumer: " + RpcContext.getContext().getRemoteAddress());
-        return "Hello " + name + ", response from provider: " + RpcContext.getContext().getLocalAddress();
+        logger.info("Hello " + name + ", request from consumer: "
+                + RpcContext.getServiceContext().getRemoteAddress());
+        return "Hello " + name + ", response from provider: "
+                + RpcContext.getServiceContext().getLocalAddress();
     }
 
+    @Override
+    public CompletableFuture<String> sayHelloAsync(String name) {
+        return null;
+    }
 }

@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.alibaba.dubbo.monitor;
 
 import org.apache.dubbo.common.URL;
@@ -23,10 +22,10 @@ import org.apache.dubbo.monitor.Monitor;
 @Deprecated
 public interface MonitorFactory extends org.apache.dubbo.monitor.MonitorFactory {
 
-    Monitor getMonitor(com.alibaba.dubbo.common.URL url);
+    com.alibaba.dubbo.monitor.Monitor getMonitor(com.alibaba.dubbo.common.URL url);
 
     @Override
     default Monitor getMonitor(URL url) {
-        return this.getMonitor(new com.alibaba.dubbo.common.URL(url));
+        return this.getMonitor(new com.alibaba.dubbo.common.DelegateURL(url));
     }
 }

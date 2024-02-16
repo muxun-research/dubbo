@@ -16,7 +16,7 @@
  */
 package org.apache.dubbo.rpc.cluster.support;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.rpc.AsyncRpcResult;
 import org.apache.dubbo.rpc.Invocation;
@@ -28,6 +28,8 @@ import org.apache.dubbo.rpc.cluster.LoadBalance;
 
 import java.util.List;
 
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CLUSTER_ERROR_RESPONSE;
+
 /**
  * When invoke fails, log the error message and ignore this error by returning an empty Result.
  * Usually used to write audit logs and other operations
@@ -36,20 +38,26 @@ import java.util.List;
  *
  */
 public class FailsafeClusterInvoker<T> extends AbstractClusterInvoker<T> {
-    private static final Logger logger = LoggerFactory.getLogger(FailsafeClusterInvoker.class);
+    private static final ErrorTypeAwareLogger logger =
+            LoggerFactory.getErrorTypeAwareLogger(FailsafeClusterInvoker.class);
 
     public FailsafeClusterInvoker(Directory<T> directory) {
         super(directory);
     }
 
     @Override
-    public Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
+    public Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance)
+            throws RpcException {
         try {
-            checkInvokers(invokers, invocation);
             Invoker<T> invoker = select(loadbalance, invocation, invokers, null);
-            return invoker.invoke(invocation);
+            return invokeWithContext(invoker, invocation);
         } catch (Throwable e) {
-            logger.error("Failsafe ignore exception: " + e.getMessage(), e);
+            logger.error(
+                    CLUSTER_ERROR_RESPONSE,
+                    "Failsafe for provider exception",
+                    "",
+                    "Failsafe ignore exception: " + e.getMessage(),
+                    e);
             return AsyncRpcResult.newDefaultAsyncResult(null, null, invocation); // ignore
         }
     }

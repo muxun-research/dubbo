@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.utils;
+
+import java.util.function.Supplier;
 
 public abstract class Assert {
 
-    protected Assert() {
-    }
+    protected Assert() {}
 
     public static void notNull(Object obj, String message) {
         if (obj == null) {
@@ -28,15 +28,31 @@ public abstract class Assert {
         }
     }
 
-    public static void notEmptyString(String str,String message) {
-        if(StringUtils.isEmpty(str)) {
+    public static void notEmptyString(String str, String message) {
+        if (StringUtils.isEmpty(str)) {
             throw new IllegalArgumentException(message);
         }
     }
+
     public static void notNull(Object obj, RuntimeException exception) {
         if (obj == null) {
             throw exception;
         }
     }
 
+    public static void assertTrue(boolean condition, String message) {
+        if (!condition) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    public static void assertTrue(boolean expression, Supplier<String> messageSupplier) {
+        if (!expression) {
+            throw new IllegalStateException(nullSafeGet(messageSupplier));
+        }
+    }
+
+    private static String nullSafeGet(Supplier<String> messageSupplier) {
+        return (messageSupplier != null ? messageSupplier.get() : null);
+    }
 }

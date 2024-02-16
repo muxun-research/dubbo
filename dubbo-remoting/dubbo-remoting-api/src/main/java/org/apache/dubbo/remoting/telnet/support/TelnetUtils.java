@@ -46,7 +46,7 @@ public class TelnetUtils {
                     int pad = widths[j] - value.length();
                     if (pad > 0) {
                         for (int k = 0; k < pad; k++) {
-                            buf.append(" ");
+                            buf.append(' ');
                         }
                     }
                 }
@@ -80,55 +80,56 @@ public class TelnetUtils {
         }
         widths[widths.length - 1] = Math.min(widths[widths.length - 1], maxwidth - maxcountbefore);
         StringBuilder buf = new StringBuilder();
-        //line
-        buf.append("+");
+        // line
+        buf.append('+');
         for (int j = 0; j < widths.length; j++) {
             for (int k = 0; k < widths[j] + 2; k++) {
-                buf.append("-");
+                buf.append('-');
             }
-            buf.append("+");
+            buf.append('+');
         }
         buf.append("\r\n");
-        //header
-        buf.append("|");
+        // header
+        buf.append('|');
         for (int j = 0; j < widths.length; j++) {
             String cell = header.get(j);
-            buf.append(" ");
+            buf.append(' ');
             buf.append(cell);
             int pad = widths[j] - cell.length();
             if (pad > 0) {
                 for (int k = 0; k < pad; k++) {
-                    buf.append(" ");
+                    buf.append(' ');
                 }
             }
             buf.append(" |");
         }
         buf.append("\r\n");
-        //line
-        buf.append("+");
+        // line
+        buf.append('+');
         for (int j = 0; j < widths.length; j++) {
             for (int k = 0; k < widths[j] + 2; k++) {
-                buf.append("-");
+                buf.append('-');
             }
-            buf.append("+");
+            buf.append('+');
         }
         buf.append("\r\n");
-        //content
+        // content
         for (List<String> row : table) {
-            StringBuffer rowbuf = new StringBuffer();
-            rowbuf.append("|");
+            StringBuilder rowbuf = new StringBuilder();
+            rowbuf.append('|');
             for (int j = 0; j < widths.length; j++) {
                 String cell = row.get(j);
-                rowbuf.append(" ");
+                rowbuf.append(' ');
                 int remaing = cell.length();
                 while (remaing > 0) {
 
                     if (rowbuf.length() >= totalWidth) {
                         buf.append(rowbuf.toString());
-                        rowbuf = new StringBuffer();
-//                        for(int m = 0;m < maxcountbefore && maxcountbefore < totalWidth ; m++){
-//                            rowbuf.append(" ");
-//                        }
+                        rowbuf = new StringBuilder();
+                        //                        for(int m = 0;m < maxcountbefore && maxcountbefore < totalWidth ;
+                        // m++){
+                        //                            rowbuf.append(" ");
+                        //                        }
                     }
 
                     rowbuf.append(cell, cell.length() - remaing, cell.length() - remaing + 1);
@@ -137,23 +138,22 @@ public class TelnetUtils {
                 int pad = widths[j] - cell.length();
                 if (pad > 0) {
                     for (int k = 0; k < pad; k++) {
-                        rowbuf.append(" ");
+                        rowbuf.append(' ');
                     }
                 }
                 rowbuf.append(" |");
             }
             buf.append(rowbuf).append("\r\n");
         }
-        //line
-        buf.append("+");
+        // line
+        buf.append('+');
         for (int j = 0; j < widths.length; j++) {
             for (int k = 0; k < widths[j] + 2; k++) {
-                buf.append("-");
+                buf.append('-');
             }
-            buf.append("+");
+            buf.append('+');
         }
         buf.append("\r\n");
         return buf.toString();
     }
-
 }

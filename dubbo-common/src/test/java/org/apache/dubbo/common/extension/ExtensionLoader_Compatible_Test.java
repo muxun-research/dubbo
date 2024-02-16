@@ -19,16 +19,25 @@ package org.apache.dubbo.common.extension;
 import org.apache.dubbo.common.extension.compatible.CompatibleExt;
 import org.apache.dubbo.common.extension.compatible.impl.CompatibleExtImpl1;
 import org.apache.dubbo.common.extension.compatible.impl.CompatibleExtImpl2;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.ModuleModel;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ExtensionLoader_Compatible_Test {
+class ExtensionLoader_Compatible_Test {
 
     @Test
-    public void test_getExtension() throws Exception {
-        assertTrue(ExtensionLoader.getExtensionLoader(CompatibleExt.class).getExtension("impl1") instanceof CompatibleExtImpl1);
-        assertTrue(ExtensionLoader.getExtensionLoader(CompatibleExt.class).getExtension("impl2") instanceof CompatibleExtImpl2);
+    void test_getExtension() {
+
+        ModuleModel moduleModel = ApplicationModel.defaultModel().getDefaultModule();
+
+        assertTrue(
+                moduleModel.getExtensionLoader(CompatibleExt.class).getExtension("impl1")
+                        instanceof CompatibleExtImpl1);
+        assertTrue(
+                moduleModel.getExtensionLoader(CompatibleExt.class).getExtension("impl2")
+                        instanceof CompatibleExtImpl2);
     }
 }

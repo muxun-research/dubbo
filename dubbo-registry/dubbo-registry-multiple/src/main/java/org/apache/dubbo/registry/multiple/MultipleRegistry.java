@@ -16,11 +16,12 @@
  */
 package org.apache.dubbo.registry.multiple;
 
-
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.constants.CommonConstants;
-import org.apache.dubbo.common.extension.ExtensionLoader;
+import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
+import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.registry.NotifyListener;
 import org.apache.dubbo.registry.Registry;
 import org.apache.dubbo.registry.RegistryFactory;
@@ -33,60 +34,104 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
+import static org.apache.dubbo.common.constants.CommonConstants.CHECK_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SEPARATOR;
 import static org.apache.dubbo.common.constants.RegistryConstants.EMPTY_PROTOCOL;
 
 /**
  * MultipleRegistry
  */
 public class MultipleRegistry extends AbstractRegistry {
+    public static final Logger LOGGER = LoggerFactory.getLogger(MultipleRegistry.class);
 
     public static final String REGISTRY_FOR_SERVICE = "service-registry";
     public static final String REGISTRY_FOR_REFERENCE = "reference-registry";
-
-    protected RegistryFactory registryFactory = ExtensionLoader.getExtensionLoader(RegistryFactory.class).getAdaptiveExtension();
+    public static final String REGISTRY_SEPARATOR = "separator";
     private final Map<String, Registry> serviceRegistries = new ConcurrentHashMap<>(4);
-    private final Map<String, Registry> referenceRegistries = new ConcurrentHashMap<String, Registry>(4);
-    private final Map<NotifyListener, MultipleNotifyListenerWrapper> multipleNotifyListenerMap = new ConcurrentHashMap<NotifyListener, MultipleNotifyListenerWrapper>(32);
+    private final Map<String, Registry> referenceRegistries = new ConcurrentHashMap<>(4);
+    private final Map<NotifyListener, MultipleNotifyListenerWrapper> multipleNotifyListenerMap =
+            new ConcurrentHashMap<>(32);
+    private final URL registryUrl;
+    private final String applicationName;
+    protected RegistryFactory registryFactory;
     protected List<String> origServiceRegistryURLs;
     protected List<String> origReferenceRegistryURLs;
     protected List<String> effectServiceRegistryURLs;
     protected List<String> effectReferenceRegistryURLs;
-    private URL registryUrl;
-    private String applicationName;
-
 
     public MultipleRegistry(URL url) {
-        super(url);
-        this.registryUrl = url;
-        this.applicationName = url.getParameter(CommonConstants.APPLICATION_KEY);
-        init();
-        checkApplicationName(this.applicationName);
-        // This urls contain parameter and it donot inherit from the parameter of url in MultipleRegistry
-        origServiceRegistryURLs = url.getParameter(REGISTRY_FOR_SERVICE, new ArrayList<String>());
-        origReferenceRegistryURLs = url.getParameter(REGISTRY_FOR_REFERENCE, new ArrayList<String>());
-        effectServiceRegistryURLs = this.filterServiceRegistry(origServiceRegistryURLs);
-        effectReferenceRegistryURLs = this.filterReferenceRegistry(origReferenceRegistryURLs);
+        this(url, true, true);
+        this.registryFactory = url.getOrDefaultApplicationModel()
+                .getExtensionLoader(RegistryFactory.class)
+                .getAdaptiveExtension();
 
         boolean defaultRegistry = url.getParameter(CommonConstants.DEFAULT_KEY, true);
         if (defaultRegistry && effectServiceRegistryURLs.isEmpty() && effectReferenceRegistryURLs.isEmpty()) {
-            throw new IllegalArgumentException("Illegal registry url. You need to configure parameter " +
-                    REGISTRY_FOR_SERVICE + " or " + REGISTRY_FOR_REFERENCE);
-        }
-        Set<String> allURLs = new HashSet<String>(effectServiceRegistryURLs);
-        allURLs.addAll(effectReferenceRegistryURLs);
-        Map<String, Registry> tmpMap = new HashMap<String, Registry>(4);
-        for (String tmpUrl : allURLs) {
-            tmpMap.put(tmpUrl, registryFactory.getRegistry(URL.valueOf(tmpUrl)));
-        }
-        for (String serviceRegistyURL : effectServiceRegistryURLs) {
-            serviceRegistries.put(serviceRegistyURL, tmpMap.get(serviceRegistyURL));
-        }
-        for (String referenceReigstyURL : effectReferenceRegistryURLs) {
-            referenceRegistries.put(referenceReigstyURL, tmpMap.get(referenceReigstyURL));
+            throw new IllegalArgumentException("Illegal registry url. You need to configure parameter "
+                    + REGISTRY_FOR_SERVICE + " or " + REGISTRY_FOR_REFERENCE);
         }
     }
 
+    public MultipleRegistry(URL url, boolean initServiceRegistry, boolean initReferenceRegistry) {
+        super(url);
+        this.registryUrl = url;
+        this.applicationName = url.getApplication();
+        this.registryFactory = url.getOrDefaultApplicationModel()
+                .getExtensionLoader(RegistryFactory.class)
+                .getAdaptiveExtension();
+
+        init();
+        checkApplicationName(this.applicationName);
+        // This urls contain parameter, and it does not inherit from the parameter of url in MultipleRegistry
+
+        Map<String, Registry> registryMap = new HashMap<>();
+        if (initServiceRegistry) {
+            initServiceRegistry(url, registryMap);
+        }
+        if (initReferenceRegistry) {
+            initReferenceRegistry(url, registryMap);
+        }
+    }
+
+    protected void initServiceRegistry(URL url, Map<String, Registry> registryMap) {
+        String serviceRegistryString = url.getParameter(REGISTRY_FOR_SERVICE);
+        char separator = url.getParameter(REGISTRY_SEPARATOR, COMMA_SEPARATOR).charAt(0);
+        origServiceRegistryURLs = StringUtils.splitToList(serviceRegistryString, separator);
+        effectServiceRegistryURLs = this.filterServiceRegistry(origServiceRegistryURLs);
+        for (String tmpUrl : effectServiceRegistryURLs) {
+            if (registryMap.get(tmpUrl) != null) {
+                serviceRegistries.put(tmpUrl, registryMap.get(tmpUrl));
+                continue;
+            }
+            final URL registryUrl = URL.valueOf(tmpUrl)
+                    .addParametersIfAbsent(url.getParameters())
+                    .addParameterIfAbsent(CHECK_KEY, url.getParameter(CHECK_KEY, "true"));
+            Registry registry = registryFactory.getRegistry(registryUrl);
+            registryMap.put(tmpUrl, registry);
+            serviceRegistries.put(tmpUrl, registry);
+        }
+    }
+
+    protected void initReferenceRegistry(URL url, Map<String, Registry> registryMap) {
+        String serviceRegistryString = url.getParameter(REGISTRY_FOR_REFERENCE);
+        char separator = url.getParameter(REGISTRY_SEPARATOR, COMMA_SEPARATOR).charAt(0);
+        origReferenceRegistryURLs = StringUtils.splitToList(serviceRegistryString, separator);
+        effectReferenceRegistryURLs = this.filterReferenceRegistry(origReferenceRegistryURLs);
+        for (String tmpUrl : effectReferenceRegistryURLs) {
+            if (registryMap.get(tmpUrl) != null) {
+                referenceRegistries.put(tmpUrl, registryMap.get(tmpUrl));
+                continue;
+            }
+            final URL registryUrl = URL.valueOf(tmpUrl)
+                    .addParametersIfAbsent(url.getParameters())
+                    .addParameterIfAbsent(CHECK_KEY, url.getParameter(CHECK_KEY, "true"));
+            Registry registry = registryFactory.getRegistry(registryUrl);
+            registryMap.put(tmpUrl, registry);
+            referenceRegistries.put(tmpUrl, registry);
+        }
+    }
 
     @Override
     public URL getUrl() {
@@ -95,7 +140,7 @@ public class MultipleRegistry extends AbstractRegistry {
 
     @Override
     public boolean isAvailable() {
-        boolean available = serviceRegistries.isEmpty() ? true : false;
+        boolean available = serviceRegistries.isEmpty();
         for (Registry serviceRegistry : serviceRegistries.values()) {
             if (serviceRegistry.isAvailable()) {
                 available = true;
@@ -105,7 +150,7 @@ public class MultipleRegistry extends AbstractRegistry {
             return false;
         }
 
-        available = referenceRegistries.isEmpty() ? true : false;
+        available = referenceRegistries.isEmpty();
         for (Registry referenceRegistry : referenceRegistries.values()) {
             if (referenceRegistry.isAvailable()) {
                 available = true;
@@ -119,7 +164,7 @@ public class MultipleRegistry extends AbstractRegistry {
 
     @Override
     public void destroy() {
-        Set<Registry> registries = new HashSet<Registry>(serviceRegistries.values());
+        Set<Registry> registries = new HashSet<>(serviceRegistries.values());
         registries.addAll(referenceRegistries.values());
         for (Registry registry : registries) {
             registry.destroy();
@@ -147,7 +192,8 @@ public class MultipleRegistry extends AbstractRegistry {
         MultipleNotifyListenerWrapper multipleNotifyListenerWrapper = new MultipleNotifyListenerWrapper(listener);
         multipleNotifyListenerMap.put(listener, multipleNotifyListenerWrapper);
         for (Registry registry : referenceRegistries.values()) {
-            SingleNotifyListener singleNotifyListener = new SingleNotifyListener(multipleNotifyListenerWrapper, registry);
+            SingleNotifyListener singleNotifyListener =
+                    new SingleNotifyListener(multipleNotifyListenerWrapper, registry);
             multipleNotifyListenerWrapper.putRegistryMap(registry.getUrl(), singleNotifyListener);
             registry.subscribe(url, singleNotifyListener);
         }
@@ -170,18 +216,17 @@ public class MultipleRegistry extends AbstractRegistry {
 
     @Override
     public List<URL> lookup(URL url) {
-        List<URL> urls = new ArrayList<URL>();
+        List<URL> urls = new ArrayList<>();
         for (Registry registry : referenceRegistries.values()) {
             List<URL> tmpUrls = registry.lookup(url);
             if (!CollectionUtils.isEmpty(tmpUrls)) {
                 urls.addAll(tmpUrls);
             }
         }
-        return urls;
+        return urls.stream().distinct().collect(Collectors.toList());
     }
 
-    protected void init() {
-    }
+    protected void init() {}
 
     protected List<String> filterServiceRegistry(List<String> serviceRegistryURLs) {
         return serviceRegistryURLs;
@@ -191,9 +236,7 @@ public class MultipleRegistry extends AbstractRegistry {
         return referenceRegistryURLs;
     }
 
-
-    protected void checkApplicationName(String applicationName) {
-    }
+    protected void checkApplicationName(String applicationName) {}
 
     protected String getApplicationName() {
         return applicationName;
@@ -223,7 +266,7 @@ public class MultipleRegistry extends AbstractRegistry {
         return effectReferenceRegistryURLs;
     }
 
-    static protected class MultipleNotifyListenerWrapper implements NotifyListener {
+    protected static class MultipleNotifyListenerWrapper implements NotifyListener {
 
         Map<URL, SingleNotifyListener> registryMap = new ConcurrentHashMap<URL, SingleNotifyListener>(4);
         NotifyListener sourceNotifyListener;
@@ -247,7 +290,7 @@ public class MultipleRegistry extends AbstractRegistry {
         }
 
         public synchronized void notifySourceListener() {
-            List<URL> notifyURLs = new ArrayList<URL>();
+            List<URL> notifyURLs = new ArrayList<>();
             URL emptyURL = null;
             for (SingleNotifyListener singleNotifyListener : registryMap.values()) {
                 List<URL> tmpUrls = singleNotifyListener.getUrlList();
@@ -264,13 +307,55 @@ public class MultipleRegistry extends AbstractRegistry {
                     }
                     continue;
                 }
-                notifyURLs.addAll(tmpUrls);
+                URL registryURL = singleNotifyListener.getRegistry().getUrl();
+                aggregateRegistryUrls(notifyURLs, tmpUrls, registryURL);
             }
             // if no notify URL, add empty protocol URL
             if (emptyURL != null && notifyURLs.isEmpty()) {
                 notifyURLs.add(emptyURL);
+                LOGGER.info("No provider after aggregation, notify url with EMPTY protocol.");
+            } else {
+                LOGGER.info("Aggregated provider url size " + notifyURLs.size());
             }
+
             this.notify(notifyURLs);
+        }
+
+        /**
+         * Aggregate urls from different registries into one unified list while appending registry specific 'attachments' into each url.
+         *
+         * These 'attachments' can be very useful for traffic management among registries.
+         *
+         * @param notifyURLs unified url list
+         * @param singleURLs single registry url list
+         * @param registryURL single registry configuration url
+         */
+        public static void aggregateRegistryUrls(List<URL> notifyURLs, List<URL> singleURLs, URL registryURL) {
+            String registryAttachments = registryURL.getParameter("attachments");
+            if (StringUtils.isNotBlank(registryAttachments)) {
+                LOGGER.info("Registry attachments " + registryAttachments
+                        + " found, will append to provider urls, urls size " + singleURLs.size());
+                String[] pairs = registryAttachments.split(COMMA_SEPARATOR);
+                Map<String, String> attachments = new HashMap<>(pairs.length);
+                for (String rawPair : pairs) {
+                    String[] keyValuePair = rawPair.split("=");
+                    if (keyValuePair.length == 2) {
+                        String key = keyValuePair[0];
+                        String value = keyValuePair[1];
+                        attachments.put(key, value);
+                    }
+                }
+
+                for (URL tmpUrl : singleURLs) {
+                    for (Map.Entry<String, String> entry : attachments.entrySet()) {
+                        tmpUrl = tmpUrl.addParameterIfAbsent(entry.getKey(), entry.getValue());
+                    }
+                    notifyURLs.add(tmpUrl);
+                }
+            } else {
+                LOGGER.info("Single registry " + registryURL + " has url size " + singleURLs.size());
+                notifyURLs.addAll(singleURLs);
+            }
         }
 
         @Override
@@ -283,7 +368,7 @@ public class MultipleRegistry extends AbstractRegistry {
         }
     }
 
-    static protected class SingleNotifyListener implements NotifyListener {
+    protected static class SingleNotifyListener implements NotifyListener {
 
         MultipleNotifyListenerWrapper multipleNotifyListenerWrapper;
         Registry registry;
@@ -309,6 +394,10 @@ public class MultipleRegistry extends AbstractRegistry {
 
         public List<URL> getUrlList() {
             return urlList;
+        }
+
+        public Registry getRegistry() {
+            return registry;
         }
     }
 }

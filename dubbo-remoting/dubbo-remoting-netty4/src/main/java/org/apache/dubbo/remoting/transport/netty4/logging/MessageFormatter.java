@@ -16,13 +16,15 @@
  */
 package org.apache.dubbo.remoting.transport.netty4.logging;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.ArrayUtils;
 
 import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.TRANSPORT_UNSUPPORTED_MESSAGE;
 
 // contributors: lizongbo: proposed special treatment of array parameter values
 // Joern Huxhorn: pointed out double[] omission, suggested deep array copy
@@ -90,7 +92,7 @@ import java.util.Map;
  * {@link #arrayFormat(String, Object[])} methods for more details.
  */
 final class MessageFormatter {
-    private static final Logger logger = LoggerFactory.getLogger(MessageFormatter.class);
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(MessageFormatter.class);
     static final char DELIM_START = '{';
     static final char DELIM_STOP = '}';
     static final String DELIM_STR = "{}";
@@ -114,7 +116,7 @@ final class MessageFormatter {
      * @return The formatted message
      */
     static FormattingTuple format(String messagePattern, Object arg) {
-        return arrayFormat(messagePattern, new Object[]{arg});
+        return arrayFormat(messagePattern, new Object[] {arg});
     }
 
     /**
@@ -136,9 +138,8 @@ final class MessageFormatter {
      *                       anchor
      * @return The formatted message
      */
-    static FormattingTuple format(final String messagePattern,
-                                  Object argA, Object argB) {
-        return arrayFormat(messagePattern, new Object[]{argA, argB});
+    static FormattingTuple format(final String messagePattern, Object argA, Object argB) {
+        return arrayFormat(messagePattern, new Object[] {argA, argB});
     }
 
     static Throwable getThrowableCandidate(Object[] argArray) {
@@ -163,8 +164,7 @@ final class MessageFormatter {
      *                       anchors
      * @return The formatted message
      */
-    static FormattingTuple arrayFormat(final String messagePattern,
-                                       final Object[] argArray) {
+    static FormattingTuple arrayFormat(final String messagePattern, final Object[] argArray) {
 
         Throwable throwableCandidate = getThrowableCandidate(argArray);
 
@@ -188,13 +188,11 @@ final class MessageFormatter {
             if (j == -1) {
                 // no more variables
                 if (i == 0) { // this is a simple string
-                    return new FormattingTuple(messagePattern, argArray,
-                            throwableCandidate);
+                    return new FormattingTuple(messagePattern, argArray, throwableCandidate);
                 } else { // add the tail string which contains no variables and return
                     // the result.
                     sbuf.append(messagePattern.substring(i));
-                    return new FormattingTuple(sbuf.toString(), argArray,
-                            throwableCandidate);
+                    return new FormattingTuple(sbuf.toString(), argArray, throwableCandidate);
                 }
             } else {
                 if (isEscapedDelimeter(messagePattern, j)) {
@@ -228,8 +226,7 @@ final class MessageFormatter {
         }
     }
 
-    static boolean isEscapedDelimeter(String messagePattern,
-                                      int delimeterStartIndex) {
+    static boolean isEscapedDelimeter(String messagePattern, int delimeterStartIndex) {
 
         if (delimeterStartIndex == 0) {
             return false;
@@ -237,14 +234,12 @@ final class MessageFormatter {
         return messagePattern.charAt(delimeterStartIndex - 1) == ESCAPE_CHAR;
     }
 
-    static boolean isDoubleEscaped(String messagePattern,
-                                   int delimeterStartIndex) {
+    static boolean isDoubleEscaped(String messagePattern, int delimeterStartIndex) {
         return delimeterStartIndex >= 2 && messagePattern.charAt(delimeterStartIndex - 2) == ESCAPE_CHAR;
     }
 
     // special treatment of array values was suggested by 'lizongbo'
-    private static void deeplyAppendParameter(StringBuffer sbuf, Object o,
-                                              Map<Object[], Void> seenMap) {
+    private static void deeplyAppendParameter(StringBuffer sbuf, Object o, Map<Object[], Void> seenMap) {
         if (o == null) {
             sbuf.append("null");
             return;
@@ -281,16 +276,14 @@ final class MessageFormatter {
             String oAsString = o.toString();
             sbuf.append(oAsString);
         } catch (Throwable t) {
-            System.err
-                    .println("SLF4J: Failed toString() invocation on an object of type ["
-                            + o.getClass().getName() + ']');
-            logger.error(t.getMessage(), t);
+            System.err.println("SLF4J: Failed toString() invocation on an object of type ["
+                    + o.getClass().getName() + ']');
+            logger.error(TRANSPORT_UNSUPPORTED_MESSAGE, "", "", t.getMessage(), t);
             sbuf.append("[FAILED toString()]");
         }
     }
 
-    private static void objectArrayAppend(StringBuffer sbuf, Object[] a,
-                                          Map<Object[], Void> seenMap) {
+    private static void objectArrayAppend(StringBuffer sbuf, Object[] a, Map<Object[], Void> seenMap) {
         sbuf.append('[');
         if (!seenMap.containsKey(a)) {
             seenMap.put(a, null);
@@ -405,6 +398,5 @@ final class MessageFormatter {
         sbuf.append(']');
     }
 
-    private MessageFormatter() {
-    }
+    private MessageFormatter() {}
 }

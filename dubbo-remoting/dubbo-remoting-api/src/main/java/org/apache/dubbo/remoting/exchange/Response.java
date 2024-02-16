@@ -16,19 +16,22 @@
  */
 package org.apache.dubbo.remoting.exchange;
 
+import static org.apache.dubbo.common.constants.CommonConstants.HEARTBEAT_EVENT;
+
 /**
  * Response
  */
 public class Response {
 
-    public static final String HEARTBEAT_EVENT = null;
-
-    public static final String READONLY_EVENT = "R";
-
     /**
      * ok.
      */
     public static final byte OK = 20;
+
+    /**
+     * serialization error
+     */
+    public static final byte SERIALIZATION_ERROR = 25;
 
     /**
      * client side timeout.
@@ -92,8 +95,7 @@ public class Response {
 
     private Object mResult;
 
-    public Response() {
-    }
+    public Response() {}
 
     public Response(long id) {
         mId = id;

@@ -22,17 +22,21 @@ import java.util.Map;
 /**
  * In-memory configuration
  */
-public class InmemoryConfiguration extends AbstractPrefixConfiguration {
+public class InmemoryConfiguration implements Configuration {
+
+    private String name;
 
     // stores the configuration key-value pairs
     private Map<String, String> store = new LinkedHashMap<>();
 
-    public InmemoryConfiguration(String prefix, String id) {
-        super(prefix, id);
+    public InmemoryConfiguration() {}
+
+    public InmemoryConfiguration(String name) {
+        this.name = name;
     }
 
-    public InmemoryConfiguration() {
-        this(null, null);
+    public InmemoryConfiguration(Map<String, String> properties) {
+        this.setProperties(properties);
     }
 
     @Override
@@ -63,5 +67,9 @@ public class InmemoryConfiguration extends AbstractPrefixConfiguration {
         if (properties != null) {
             this.store = properties;
         }
+    }
+
+    public Map<String, String> getProperties() {
+        return store;
     }
 }

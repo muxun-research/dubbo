@@ -20,7 +20,7 @@ import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.URLBuilder;
 import org.apache.dubbo.common.Version;
 import org.apache.dubbo.common.bytecode.Wrapper;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.ConfigUtils;
 import org.apache.dubbo.common.utils.NetUtils;
@@ -35,10 +35,11 @@ import org.apache.dubbo.rpc.service.GenericService;
 
 import java.lang.reflect.Constructor;
 
+import static org.apache.dubbo.common.constants.CommonConstants.STUB_EVENT_KEY;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROXY_FAILED_EXPORT_SERVICE;
 import static org.apache.dubbo.rpc.Constants.DEFAULT_STUB_EVENT;
 import static org.apache.dubbo.rpc.Constants.IS_SERVER_KEY;
 import static org.apache.dubbo.rpc.Constants.LOCAL_KEY;
-import static org.apache.dubbo.rpc.Constants.STUB_EVENT_KEY;
 import static org.apache.dubbo.rpc.Constants.STUB_EVENT_METHODS_KEY;
 import static org.apache.dubbo.rpc.Constants.STUB_KEY;
 
@@ -48,7 +49,8 @@ import static org.apache.dubbo.rpc.Constants.STUB_KEY;
  */
 public class StubProxyFactoryWrapper implements ProxyFactory {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(StubProxyFactoryWrapper.class);
+    private static final ErrorTypeAwareLogger LOGGER =
+            LoggerFactory.getErrorTypeAwareLogger(StubProxyFactoryWrapper.class);
 
     private final ProxyFactory proxyFactory;
 
@@ -64,13 +66,7 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
 
     @Override
     public <T> T getProxy(Invoker<T> invoker, boolean generic) throws RpcException {
-        return proxyFactory.getProxy(invoker, generic);
-    }
-
-    @Override
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public <T> T getProxy(Invoker<T> invoker) throws RpcException {
-        T proxy = proxyFactory.getProxy(invoker);
+        T proxy = proxyFactory.getProxy(invoker, generic);
         if (GenericService.class != invoker.getInterface()) {
             URL url = invoker.getUrl();
             String stub = url.getParameter(STUB_KEY, url.getParameter(LOCAL_KEY));
@@ -86,32 +82,53 @@ public class StubProxyFactoryWrapper implements ProxyFactory {
                 try {
                     Class<?> stubClass = ReflectUtils.forName(stub);
                     if (!serviceType.isAssignableFrom(stubClass)) {
-                        throw new IllegalStateException("The stub implementation class " + stubClass.getName() + " not implement interface " + serviceType.getName());
+                        throw new IllegalStateException("The stub implementation class " + stubClass.getName()
+                                + " not implement interface " + serviceType.getName());
                     }
                     try {
                         Constructor<?> constructor = ReflectUtils.findConstructor(stubClass, serviceType);
-                        proxy = (T) constructor.newInstance(new Object[]{proxy});
-                        //export stub service
+                        proxy = (T) constructor.newInstance(new Object[] {proxy});
+                        // export stub service
                         URLBuilder urlBuilder = URLBuilder.from(url);
                         if (url.getParameter(STUB_EVENT_KEY, DEFAULT_STUB_EVENT)) {
-                            urlBuilder.addParameter(STUB_EVENT_METHODS_KEY, StringUtils.join(Wrapper.getWrapper(proxy.getClass()).getDeclaredMethodNames(), ","));
+                            urlBuilder.addParameter(
+                                    STUB_EVENT_METHODS_KEY,
+                                    StringUtils.join(
+                                            Wrapper.getWrapper(proxy.getClass()).getDeclaredMethodNames(), ","));
                             urlBuilder.addParameter(IS_SERVER_KEY, Boolean.FALSE.toString());
                             try {
-                                export(proxy, (Class) invoker.getInterface(), urlBuilder.build());
+                                export(proxy, invoker.getInterface(), urlBuilder.build());
                             } catch (Exception e) {
-                                LOGGER.error("export a stub service error.", e);
+                                LOGGER.error(PROXY_FAILED_EXPORT_SERVICE, "", "", "export a stub service error.", e);
                             }
                         }
                     } catch (NoSuchMethodException e) {
-                        throw new IllegalStateException("No such constructor \"public " + stubClass.getSimpleName() + "(" + serviceType.getName() + ")\" in stub implementation class " + stubClass.getName(), e);
+                        throw new IllegalStateException(
+                                "No such constructor \"public " + stubClass.getSimpleName() + "("
+                                        + serviceType.getName() + ")\" in stub implementation class "
+                                        + stubClass.getName(),
+                                e);
                     }
                 } catch (Throwable t) {
-                    LOGGER.error("Failed to create stub implementation class " + stub + " in consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion() + ", cause: " + t.getMessage(), t);
+                    LOGGER.error(
+                            PROXY_FAILED_EXPORT_SERVICE,
+                            "",
+                            "",
+                            "Failed to create stub implementation class " + stub + " in consumer "
+                                    + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion()
+                                    + ", cause: " + t.getMessage(),
+                            t);
                     // ignore
                 }
             }
         }
         return proxy;
+    }
+
+    @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <T> T getProxy(Invoker<T> invoker) throws RpcException {
+        return getProxy(invoker, false);
     }
 
     @Override

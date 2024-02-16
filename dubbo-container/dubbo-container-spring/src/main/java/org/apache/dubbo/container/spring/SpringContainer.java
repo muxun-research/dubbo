@@ -16,31 +16,33 @@
  */
 package org.apache.dubbo.container.spring;
 
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
-import org.apache.dubbo.common.utils.ConfigUtils;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.container.Container;
+
 import org.springframework.context.support.ClassPathXmlApplicationContext;
+
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_STOP_DUBBO_ERROR;
 
 /**
  * Spring服务容器实现，为现在Dubbo默认的服务容器实现
  */
 public class SpringContainer implements Container {
 
-	/**
-	 * dubbo的Spring配置
-	 */
-	public static final String SPRING_CONFIG = "dubbo.spring.config";
-	/**
-	 * dubbo的默认配置文件地址
-	 */
-	public static final String DEFAULT_SPRING_CONFIG = "classpath*:META-INF/spring/*.xml";
-    private static final Logger logger = LoggerFactory.getLogger(SpringContainer.class);
-	/**
-	 * Spring上下文，全局唯一
-	 */
-	static ClassPathXmlApplicationContext context;
+    /**
+     * dubbo的Spring配置
+     */
+    public static final String SPRING_CONFIG = "dubbo.spring.config";
+    /**
+     * dubbo的默认配置文件地址
+     */
+    public static final String DEFAULT_SPRING_CONFIG = "classpath*:META-INF/spring/*.xml";
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(SpringContainer.class);
+    /**
+     * Spring上下文，全局唯一
+     */
+    static ClassPathXmlApplicationContext context;
 
     public static ClassPathXmlApplicationContext getContext() {
         return context;
@@ -49,8 +51,8 @@ public class SpringContainer implements Container {
     @Override
     public void start() {
 		// 获取Spring配置的配置路径
-        String configPath = ConfigUtils.getProperty(SPRING_CONFIG);
 		// 如果没有以"dubbo.spring.config"为开头的配置属性，则检查默认的配置文件地址
+        String configPath = System.getProperty(SPRING_CONFIG);
         if (StringUtils.isEmpty(configPath)) {
             configPath = DEFAULT_SPRING_CONFIG;
 		}
@@ -72,7 +74,7 @@ public class SpringContainer implements Container {
                 context = null;
             }
         } catch (Throwable e) {
-            logger.error(e.getMessage(), e);
+            logger.error(CONFIG_STOP_DUBBO_ERROR, "", "", e.getMessage(), e);
         }
     }
 

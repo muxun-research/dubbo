@@ -20,13 +20,13 @@ import org.apache.dubbo.config.annotation.Reference;
 import org.apache.dubbo.config.annotation.Service;
 import org.apache.dubbo.config.spring.ReferenceBean;
 import org.apache.dubbo.config.spring.ServiceBean;
+import org.apache.dubbo.config.spring.util.AnnotationUtils;
 
 import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
-import static org.apache.dubbo.config.spring.util.AnnotationUtils.getAttribute;
-import static org.apache.dubbo.config.spring.util.AnnotationUtils.resolveInterfaceName;
+import static org.apache.dubbo.config.spring.util.DubboAnnotationUtils.resolveInterfaceName;
 import static org.springframework.core.annotation.AnnotationUtils.getAnnotationAttributes;
 
 /**
@@ -61,10 +61,11 @@ public class ServiceBeanNameBuilder {
         this.environment = environment;
     }
 
-    private ServiceBeanNameBuilder(AnnotationAttributes attributes, Class<?> defaultInterfaceClass, Environment environment) {
+    private ServiceBeanNameBuilder(
+            AnnotationAttributes attributes, Class<?> defaultInterfaceClass, Environment environment) {
         this(resolveInterfaceName(attributes, defaultInterfaceClass), environment);
-        this.group(getAttribute(attributes,"group"));
-        this.version(getAttribute(attributes,"version"));
+        this.group(AnnotationUtils.getAttribute(attributes, "group"));
+        this.version(AnnotationUtils.getAttribute(attributes, "version"));
     }
 
     /**
@@ -74,11 +75,16 @@ public class ServiceBeanNameBuilder {
      * @return
      * @since 2.7.3
      */
-    public static ServiceBeanNameBuilder create(AnnotationAttributes attributes, Class<?> defaultInterfaceClass, Environment environment) {
+    public static ServiceBeanNameBuilder create(
+            AnnotationAttributes attributes, Class<?> defaultInterfaceClass, Environment environment) {
         return new ServiceBeanNameBuilder(attributes, defaultInterfaceClass, environment);
     }
 
     public static ServiceBeanNameBuilder create(Class<?> interfaceClass, Environment environment) {
+        return new ServiceBeanNameBuilder(interfaceClass, environment);
+    }
+
+    public static ServiceBeanNameBuilder create(String interfaceClass, Environment environment) {
         return new ServiceBeanNameBuilder(interfaceClass, environment);
     }
 
@@ -91,8 +97,9 @@ public class ServiceBeanNameBuilder {
     }
 
     private static void append(StringBuilder builder, String value) {
+        builder.append(SEPARATOR);
         if (StringUtils.hasText(value)) {
-            builder.append(SEPARATOR).append(value);
+            builder.append(value);
         }
     }
 

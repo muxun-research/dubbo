@@ -18,10 +18,6 @@ package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.rpc.Invoker;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,8 +27,12 @@ import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
 @Disabled
-public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
+class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
 
     private void assertStrictWRRResult(int loop, Map<Invoker, InvokeResult> resultMap) {
         int invokeCount = 0;
@@ -47,7 +47,7 @@ public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
     }
 
     @Test
-    public void testRoundRobinLoadBalanceSelect() {
+    void testRoundRobinLoadBalanceSelect() {
         int runs = 10000;
         Map<Invoker, AtomicLong> counter = getInvokeCounter(runs, RoundRobinLoadBalance.NAME);
         for (Map.Entry<Invoker, AtomicLong> entry : counter.entrySet()) {
@@ -57,7 +57,7 @@ public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
     }
 
     @Test
-    public void testSelectByWeight() {
+    void testSelectByWeight() {
         final Map<Invoker, InvokeResult> totalMap = new HashMap<Invoker, InvokeResult>();
         final AtomicBoolean shouldBegin = new AtomicBoolean(false);
         final int runs = 10000;
@@ -77,7 +77,9 @@ public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
                         if (!totalMap.containsKey(entry.getKey())) {
                             totalMap.put(entry.getKey(), entry.getValue());
                         } else {
-                            totalMap.get(entry.getKey()).getCount().addAndGet(entry.getValue().getCount().get());
+                            totalMap.get(entry.getKey())
+                                    .getCount()
+                                    .addAndGet(entry.getValue().getCount().get());
                         }
                     }
                 }
@@ -98,9 +100,9 @@ public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
     }
 
     @Test
-    public void testNodeCacheShouldNotRecycle() {
+    void testNodeCacheShouldNotRecycle() {
         int loop = 10000;
-        //tmperately add a new invoker
+        // tmperately add a new invoker
         weightInvokers.add(weightInvokerTmp);
         try {
             Map<Invoker, InvokeResult> resultMap = getWeightedInvokeResult(loop, RoundRobinLoadBalance.NAME);
@@ -108,42 +110,40 @@ public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
 
             // inner nodes cache judgement
             RoundRobinLoadBalance lb = (RoundRobinLoadBalance) getLoadBalance(RoundRobinLoadBalance.NAME);
-            Assertions.assertEquals(weightInvokers.size(), lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
+            Assertions.assertEquals(
+                    weightInvokers.size(),
+                    lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
 
             weightInvokers.remove(weightInvokerTmp);
 
             resultMap = getWeightedInvokeResult(loop, RoundRobinLoadBalance.NAME);
             assertStrictWRRResult(loop, resultMap);
 
-            Assertions.assertNotEquals(weightInvokers.size(), lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
+            Assertions.assertNotEquals(
+                    weightInvokers.size(),
+                    lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
         } finally {
-            //prevent other UT's failure
+            // prevent other UT's failure
             weightInvokers.remove(weightInvokerTmp);
         }
     }
 
     @Test
-    public void testNodeCacheShouldRecycle() {
+    void testNodeCacheShouldRecycle() {
         {
             Field recycleTimeField = null;
             try {
-                //change recycle time to 1 ms
+                // change recycle time to 1 ms
                 recycleTimeField = RoundRobinLoadBalance.class.getDeclaredField("RECYCLE_PERIOD");
                 recycleTimeField.setAccessible(true);
                 recycleTimeField.setInt(RoundRobinLoadBalance.class, 10);
-            } catch (NoSuchFieldException e) {
-                Assertions.assertTrue(true, "getField failed");
-            } catch (SecurityException e) {
-                Assertions.assertTrue(true, "getField failed");
-            } catch (IllegalArgumentException e) {
-                Assertions.assertTrue(true, "getField failed");
-            } catch (IllegalAccessException e) {
+            } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException | SecurityException e) {
                 Assertions.assertTrue(true, "getField failed");
             }
         }
 
         int loop = 10000;
-        //tmperately add a new invoker
+        // tmperately add a new invoker
         weightInvokers.add(weightInvokerTmp);
         try {
             Map<Invoker, InvokeResult> resultMap = getWeightedInvokeResult(loop, RoundRobinLoadBalance.NAME);
@@ -151,18 +151,21 @@ public class RoundRobinLoadBalanceTest extends LoadBalanceBaseTest {
 
             // inner nodes cache judgement
             RoundRobinLoadBalance lb = (RoundRobinLoadBalance) getLoadBalance(RoundRobinLoadBalance.NAME);
-            Assertions.assertEquals(weightInvokers.size(), lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
+            Assertions.assertEquals(
+                    weightInvokers.size(),
+                    lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
 
             weightInvokers.remove(weightInvokerTmp);
 
             resultMap = getWeightedInvokeResult(loop, RoundRobinLoadBalance.NAME);
             assertStrictWRRResult(loop, resultMap);
 
-            Assertions.assertEquals(weightInvokers.size(), lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
+            Assertions.assertEquals(
+                    weightInvokers.size(),
+                    lb.getInvokerAddrList(weightInvokers, weightTestInvocation).size());
         } finally {
-            //prevent other UT's failure
+            // prevent other UT's failure
             weightInvokers.remove(weightInvokerTmp);
         }
     }
-
 }

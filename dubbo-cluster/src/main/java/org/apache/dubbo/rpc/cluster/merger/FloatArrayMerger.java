@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.rpc.cluster.merger;
 
 import org.apache.dubbo.common.utils.ArrayUtils;
@@ -37,9 +36,8 @@ public class FloatArrayMerger implements Merger<float[]> {
         int index = 0;
         for (float[] array : items) {
             if (array != null) {
-                for (float item : array) {
-                    result[index++] = item;
-                }
+                System.arraycopy(array, 0, result, index, array.length);
+                index += array.length;
             }
         }
         return result;

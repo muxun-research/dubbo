@@ -16,18 +16,7 @@
  */
 package org.apache.dubbo.common.bytecode;
 
-import javassist.CannotCompileException;
-import javassist.ClassPool;
-import javassist.CtClass;
-import javassist.CtConstructor;
-import javassist.CtField;
-import javassist.CtMethod;
-import javassist.CtNewConstructor;
-import javassist.CtNewMethod;
-import javassist.LoaderClassPath;
-import javassist.NotFoundException;
 import org.apache.dubbo.common.utils.ArrayUtils;
-import org.apache.dubbo.common.utils.ClassUtils;
 import org.apache.dubbo.common.utils.ReflectUtils;
 import org.apache.dubbo.common.utils.StringUtils;
 
@@ -43,6 +32,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import javassist.CannotCompileException;
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtConstructor;
+import javassist.CtField;
+import javassist.CtMethod;
+import javassist.CtNewConstructor;
+import javassist.CtNewMethod;
+import javassist.LoaderClassPath;
+import javassist.NotFoundException;
 
 /**
  * ClassGenerator
@@ -51,7 +50,7 @@ public final class ClassGenerator {
 
     private static final AtomicLong CLASS_NAME_COUNTER = new AtomicLong(0);
     private static final String SIMPLE_NAME_TAG = "<init>";
-    private static final Map<ClassLoader, ClassPool> POOL_MAP = new ConcurrentHashMap<ClassLoader, ClassPool>(); //ClassLoader - ClassPool
+    private static final Map<ClassLoader, ClassPool> POOL_MAP = new ConcurrentHashMap<>(); // ClassLoader - ClassPool
     private ClassPool mPool;
     private CtClass mCtc;
     private String mClassName;
@@ -60,23 +59,26 @@ public final class ClassGenerator {
     private List<String> mFields;
     private List<String> mConstructors;
     private List<String> mMethods;
+    private ClassLoader mClassLoader;
     private Map<String, Method> mCopyMethods; // <method desc,method instance>
     private Map<String, Constructor<?>> mCopyConstructors; // <constructor desc,constructor instance>
     private boolean mDefaultConstructor = false;
 
-    private ClassGenerator() {
-    }
+    private ClassGenerator() {}
 
-    private ClassGenerator(ClassPool pool) {
+    private ClassGenerator(ClassLoader classLoader, ClassPool pool) {
+        mClassLoader = classLoader;
         mPool = pool;
     }
 
     public static ClassGenerator newInstance() {
-        return new ClassGenerator(getClassPool(Thread.currentThread().getContextClassLoader()));
+        return new ClassGenerator(
+                Thread.currentThread().getContextClassLoader(),
+                getClassPool(Thread.currentThread().getContextClassLoader()));
     }
 
     public static ClassGenerator newInstance(ClassLoader loader) {
-        return new ClassGenerator(getClassPool(loader));
+        return new ClassGenerator(loader, getClassPool(loader));
     }
 
     public static boolean isDynamicClass(Class<?> cl) {
@@ -90,9 +92,15 @@ public final class ClassGenerator {
 
         ClassPool pool = POOL_MAP.get(loader);
         if (pool == null) {
-            pool = new ClassPool(true);
-            pool.appendClassPath(new LoaderClassPath(loader));
-            POOL_MAP.put(loader, pool);
+            synchronized (POOL_MAP) {
+                pool = POOL_MAP.get(loader);
+                if (pool == null) {
+                    pool = new ClassPool(true);
+                    pool.insertClassPath(new LoaderClassPath(loader));
+                    pool.insertClassPath(new DubboLoaderClassPath());
+                    POOL_MAP.put(loader, pool);
+                }
+            }
         }
         return pool;
     }
@@ -101,11 +109,9 @@ public final class ClassGenerator {
         StringBuilder modifier = new StringBuilder();
         if (Modifier.isPublic(mod)) {
             modifier.append("public");
-        }
-        if (Modifier.isProtected(mod)) {
+        } else if (Modifier.isProtected(mod)) {
             modifier.append("protected");
-        }
-        if (Modifier.isPrivate(mod)) {
+        } else if (Modifier.isPrivate(mod)) {
             modifier.append("private");
         }
 
@@ -130,7 +136,7 @@ public final class ClassGenerator {
 
     public ClassGenerator addInterface(String cn) {
         if (mInterfaces == null) {
-            mInterfaces = new HashSet<String>();
+            mInterfaces = new HashSet<>();
         }
         mInterfaces.add(cn);
         return this;
@@ -152,7 +158,7 @@ public final class ClassGenerator {
 
     public ClassGenerator addField(String code) {
         if (mFields == null) {
-            mFields = new ArrayList<String>();
+            mFields = new ArrayList<>();
         }
         mFields.add(code);
         return this;
@@ -176,7 +182,7 @@ public final class ClassGenerator {
 
     public ClassGenerator addMethod(String code) {
         if (mMethods == null) {
-            mMethods = new ArrayList<String>();
+            mMethods = new ArrayList<>();
         }
         mMethods.add(code);
         return this;
@@ -186,17 +192,22 @@ public final class ClassGenerator {
         return addMethod(name, mod, rt, pts, null, body);
     }
 
-    public ClassGenerator addMethod(String name, int mod, Class<?> rt, Class<?>[] pts, Class<?>[] ets,
-                                    String body) {
+    public ClassGenerator addMethod(String name, int mod, Class<?> rt, Class<?>[] pts, Class<?>[] ets, String body) {
         StringBuilder sb = new StringBuilder();
-        sb.append(modifier(mod)).append(' ').append(ReflectUtils.getName(rt)).append(' ').append(name);
+        sb.append(modifier(mod))
+                .append(' ')
+                .append(ReflectUtils.getName(rt))
+                .append(' ')
+                .append(name);
         sb.append('(');
-        for (int i = 0; i < pts.length; i++) {
-            if (i > 0) {
-                sb.append(',');
+        if (ArrayUtils.isNotEmpty(pts)) {
+            for (int i = 0; i < pts.length; i++) {
+                if (i > 0) {
+                    sb.append(',');
+                }
+                sb.append(ReflectUtils.getName(pts[i]));
+                sb.append(" arg").append(i);
             }
-            sb.append(ReflectUtils.getName(pts[i]));
-            sb.append(" arg").append(i);
         }
         sb.append(')');
         if (ArrayUtils.isNotEmpty(ets)) {
@@ -221,7 +232,7 @@ public final class ClassGenerator {
         String desc = name + ReflectUtils.getDescWithoutMethodName(m);
         addMethod(':' + desc);
         if (mCopyMethods == null) {
-            mCopyMethods = new ConcurrentHashMap<String, Method>(8);
+            mCopyMethods = new ConcurrentHashMap<>(8);
         }
         mCopyMethods.put(desc, m);
         return this;
@@ -229,7 +240,7 @@ public final class ClassGenerator {
 
     public ClassGenerator addConstructor(String code) {
         if (mConstructors == null) {
-            mConstructors = new LinkedList<String>();
+            mConstructors = new LinkedList<>();
         }
         mConstructors.add(code);
         return this;
@@ -268,7 +279,7 @@ public final class ClassGenerator {
         String desc = ReflectUtils.getDesc(c);
         addConstructor(":" + desc);
         if (mCopyConstructors == null) {
-            mCopyConstructors = new ConcurrentHashMap<String, Constructor<?>>(4);
+            mCopyConstructors = new ConcurrentHashMap<>(4);
         }
         mCopyConstructors.put(desc, c);
         return this;
@@ -283,12 +294,15 @@ public final class ClassGenerator {
         return mPool;
     }
 
-    public Class<?> toClass() {
-        return toClass(ClassUtils.getClassLoader(ClassGenerator.class),
-                getClass().getProtectionDomain());
+    /**
+     * @param neighbor    A class belonging to the same package that this
+     *                    class belongs to.  It is used to load the class.
+     */
+    public Class<?> toClass(Class<?> neighbor) {
+        return toClass(neighbor, mClassLoader, getClass().getProtectionDomain());
     }
 
-    public Class<?> toClass(ClassLoader loader, ProtectionDomain pd) {
+    public Class<?> toClass(Class<?> neighborClass, ClassLoader loader, ProtectionDomain pd) {
         if (mCtc != null) {
             mCtc.detach();
         }
@@ -297,7 +311,9 @@ public final class ClassGenerator {
             CtClass ctcs = mSuperClass == null ? null : mPool.get(mSuperClass);
             if (mClassName == null) {
                 mClassName = (mSuperClass == null || javassist.Modifier.isPublic(ctcs.getModifiers())
-                        ? ClassGenerator.class.getName() : mSuperClass + "$sc") + id;
+                                ? ClassGenerator.class.getName()
+                                : mSuperClass + "$sc")
+                        + id;
             }
             mCtc = mPool.makeClass(mClassName);
             if (mSuperClass != null) {
@@ -317,8 +333,11 @@ public final class ClassGenerator {
             if (mMethods != null) {
                 for (String code : mMethods) {
                     if (code.charAt(0) == ':') {
-                        mCtc.addMethod(CtNewMethod.copy(getCtMethod(mCopyMethods.get(code.substring(1))),
-                                code.substring(1, code.indexOf('(')), mCtc, null));
+                        mCtc.addMethod(CtNewMethod.copy(
+                                getCtMethod(mCopyMethods.get(code.substring(1))),
+                                code.substring(1, code.indexOf('(')),
+                                mCtc,
+                                null));
                     } else {
                         mCtc.addMethod(CtNewMethod.make(code, mCtc));
                     }
@@ -330,8 +349,8 @@ public final class ClassGenerator {
             if (mConstructors != null) {
                 for (String code : mConstructors) {
                     if (code.charAt(0) == ':') {
-                        mCtc.addConstructor(CtNewConstructor
-                                .copy(getCtConstructor(mCopyConstructors.get(code.substring(1))), mCtc, null));
+                        mCtc.addConstructor(CtNewConstructor.copy(
+                                getCtConstructor(mCopyConstructors.get(code.substring(1))), mCtc, null));
                     } else {
                         String[] sn = mCtc.getSimpleName().split("\\$+"); // inner class name include $.
                         mCtc.addConstructor(
@@ -339,12 +358,18 @@ public final class ClassGenerator {
                     }
                 }
             }
-            return mCtc.toClass(loader, pd);
+
+            try {
+                return mPool.toClass(mCtc, neighborClass, loader, pd);
+            } catch (Throwable t) {
+                if (!(t instanceof CannotCompileException)) {
+                    return mPool.toClass(mCtc, loader, pd);
+                }
+                throw t;
+            }
         } catch (RuntimeException e) {
             throw e;
-        } catch (NotFoundException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        } catch (CannotCompileException e) {
+        } catch (NotFoundException | CannotCompileException e) {
             throw new RuntimeException(e.getMessage(), e);
         }
     }
@@ -378,15 +403,12 @@ public final class ClassGenerator {
     }
 
     private CtMethod getCtMethod(Method m) throws NotFoundException {
-        return getCtClass(m.getDeclaringClass())
-                .getMethod(m.getName(), ReflectUtils.getDescWithoutMethodName(m));
+        return getCtClass(m.getDeclaringClass()).getMethod(m.getName(), ReflectUtils.getDescWithoutMethodName(m));
     }
 
     private CtConstructor getCtConstructor(Constructor<?> c) throws NotFoundException {
         return getCtClass(c.getDeclaringClass()).getConstructor(ReflectUtils.getDesc(c));
     }
 
-    public static interface DC {
-
-    } // dynamic class tag interface.
+    public static interface DC {} // dynamic class tag interface.
 }

@@ -16,19 +16,17 @@
  */
 package org.apache.dubbo.rpc.cluster.support;
 
-import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.cluster.Cluster;
 import org.apache.dubbo.rpc.cluster.Directory;
+import org.apache.dubbo.rpc.cluster.support.wrapper.AbstractCluster;
 
 /**
  * 广播集群
  */
-public class BroadcastCluster implements Cluster {
+public class BroadcastCluster extends AbstractCluster {
 
     @Override
-    public <T> Invoker<T> join(Directory<T> directory) throws RpcException {
-        return new BroadcastClusterInvoker<T>(directory);
+    public <T> AbstractClusterInvoker<T> doJoin(Directory<T> directory) throws RpcException {
+        return new BroadcastClusterInvoker<>(directory);
     }
-
 }

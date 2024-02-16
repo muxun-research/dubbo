@@ -16,11 +16,12 @@
  */
 package org.apache.dubbo.common.compiler.support;
 
+import org.apache.dubbo.common.bytecode.DubboLoaderClassPath;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import javassist.CannotCompileException;
 import javassist.ClassPool;
 import javassist.CtClass;
@@ -43,17 +44,17 @@ public class CtClassBuilder {
 
     private String superClassName = "java.lang.Object";
 
-    private List<String> imports = new ArrayList<>();
+    private final List<String> imports = new ArrayList<>();
 
-    private Map<String, String> fullNames = new HashMap<>();
+    private final Map<String, String> fullNames = new HashMap<>();
 
-    private List<String> ifaces = new ArrayList<>();
+    private final List<String> ifaces = new ArrayList<>();
 
-    private List<String> constructors = new ArrayList<>();
+    private final List<String> constructors = new ArrayList<>();
 
-    private List<String> fields = new ArrayList<>();
+    private final List<String> fields = new ArrayList<>();
 
-    private List<String> methods = new ArrayList<>();
+    private final List<String> methods = new ArrayList<>();
 
     public String getClassName() {
         return className;
@@ -120,7 +121,7 @@ public class CtClassBuilder {
 
     /**
      * get full qualified class name
-     * 
+     *
      * @param className super class name, maybe qualified or not
      */
     protected String getQualifiedClassName(String className) {
@@ -140,13 +141,14 @@ public class CtClassBuilder {
      */
     public CtClass build(ClassLoader classLoader) throws NotFoundException, CannotCompileException {
         ClassPool pool = new ClassPool(true);
-        pool.appendClassPath(new LoaderClassPath(classLoader));
-        
+        pool.insertClassPath(new LoaderClassPath(classLoader));
+        pool.insertClassPath(new DubboLoaderClassPath());
+
         // create class
         CtClass ctClass = pool.makeClass(className, pool.get(superClassName));
 
         // add imported packages
-        imports.stream().forEach(pool::importPackage);
+        imports.forEach(pool::importPackage);
 
         // add implemented interfaces
         for (String iface : ifaces) {
@@ -170,5 +172,4 @@ public class CtClassBuilder {
 
         return ctClass;
     }
-
 }

@@ -16,72 +16,79 @@
  */
 package org.apache.dubbo.common.compiler.support;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ClassUtilsTest {
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+class ClassUtilsTest {
 
     @Test
-    public void testNewInstance() {
+    void testNewInstance() {
         HelloServiceImpl0 instance = (HelloServiceImpl0) ClassUtils.newInstance(HelloServiceImpl0.class.getName());
         Assertions.assertEquals("Hello world!", instance.sayHello());
     }
 
     @Test
-    public void testNewInstance0() {
-        Assertions.assertThrows(IllegalStateException.class, () -> ClassUtils.newInstance(PrivateHelloServiceImpl.class.getName()));
+    void testNewInstance0() {
+        Assertions.assertThrows(
+                IllegalStateException.class, () -> ClassUtils.newInstance(PrivateHelloServiceImpl.class.getName()));
     }
 
     @Test
-    public void testNewInstance1() {
-        Assertions.assertThrows(IllegalStateException.class, () -> ClassUtils.newInstance("org.apache.dubbo.common.compiler.support.internal.HelloServiceInternalImpl"));
+    void testNewInstance1() {
+        Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> ClassUtils.newInstance(
+                        "org.apache.dubbo.common.compiler.support.internal.HelloServiceInternalImpl"));
     }
 
     @Test
-    public void testNewInstance2() {
-        Assertions.assertThrows(IllegalStateException.class, () -> ClassUtils.newInstance("org.apache.dubbo.common.compiler.support.internal.NotExistsImpl"));
+    void testNewInstance2() {
+        Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> ClassUtils.newInstance("org.apache.dubbo.common.compiler.support.internal.NotExistsImpl"));
     }
 
     @Test
-    public void testForName() {
-        ClassUtils.forName(new String[]{"org.apache.dubbo.common.compiler.support"}, "HelloServiceImpl0");
+    void testForName() {
+        ClassUtils.forName(new String[] {"org.apache.dubbo.common.compiler.support"}, "HelloServiceImpl0");
     }
 
     @Test
-    public void testForName1() {
-        Assertions.assertThrows(IllegalStateException.class, () -> ClassUtils.forName(new String[]{"org.apache.dubbo.common.compiler.support"}, "HelloServiceImplXX"));
+    void testForName1() {
+        Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> ClassUtils.forName(
+                        new String[] {"org.apache.dubbo.common.compiler.support"}, "HelloServiceImplXX"));
     }
 
     @Test
-    public void testForName2() {
-        ClassUtils.forName("boolean");
-        ClassUtils.forName("byte");
-        ClassUtils.forName("char");
-        ClassUtils.forName("short");
-        ClassUtils.forName("int");
-        ClassUtils.forName("long");
-        ClassUtils.forName("float");
-        ClassUtils.forName("double");
-        ClassUtils.forName("boolean[]");
-        ClassUtils.forName("byte[]");
-        ClassUtils.forName("char[]");
-        ClassUtils.forName("short[]");
-        ClassUtils.forName("int[]");
-        ClassUtils.forName("long[]");
-        ClassUtils.forName("float[]");
-        ClassUtils.forName("double[]");
+    void testForName2() {
+        Assertions.assertEquals(boolean.class, ClassUtils.forName("boolean"));
+        Assertions.assertEquals(byte.class, ClassUtils.forName("byte"));
+        Assertions.assertEquals(char.class, ClassUtils.forName("char"));
+        Assertions.assertEquals(short.class, ClassUtils.forName("short"));
+        Assertions.assertEquals(int.class, ClassUtils.forName("int"));
+        Assertions.assertEquals(long.class, ClassUtils.forName("long"));
+        Assertions.assertEquals(float.class, ClassUtils.forName("float"));
+        Assertions.assertEquals(double.class, ClassUtils.forName("double"));
+        Assertions.assertEquals(boolean[].class, ClassUtils.forName("boolean[]"));
+        Assertions.assertEquals(byte[].class, ClassUtils.forName("byte[]"));
+        Assertions.assertEquals(char[].class, ClassUtils.forName("char[]"));
+        Assertions.assertEquals(short[].class, ClassUtils.forName("short[]"));
+        Assertions.assertEquals(int[].class, ClassUtils.forName("int[]"));
+        Assertions.assertEquals(long[].class, ClassUtils.forName("long[]"));
+        Assertions.assertEquals(float[].class, ClassUtils.forName("float[]"));
+        Assertions.assertEquals(double[].class, ClassUtils.forName("double[]"));
     }
 
     @Test
-    public void testGetBoxedClass() {
+    void testGetBoxedClass() {
         Assertions.assertEquals(Boolean.class, ClassUtils.getBoxedClass(boolean.class));
         Assertions.assertEquals(Character.class, ClassUtils.getBoxedClass(char.class));
         Assertions.assertEquals(Byte.class, ClassUtils.getBoxedClass(byte.class));
@@ -94,7 +101,7 @@ public class ClassUtilsTest {
     }
 
     @Test
-    public void testBoxedAndUnboxed() {
+    void testBoxedAndUnboxed() {
         Assertions.assertEquals(Boolean.valueOf(true), ClassUtils.boxed(true));
         Assertions.assertEquals(Character.valueOf('0'), ClassUtils.boxed('0'));
         Assertions.assertEquals(Byte.valueOf((byte) 0), ClassUtils.boxed((byte) 0));
@@ -110,12 +117,12 @@ public class ClassUtilsTest {
         Assertions.assertEquals((short) 0, ClassUtils.unboxed(Short.valueOf((short) 0)));
         Assertions.assertEquals(0, ClassUtils.unboxed(Integer.valueOf((int) 0)));
         Assertions.assertEquals((long) 0, ClassUtils.unboxed(Long.valueOf((long) 0)));
-//        Assertions.assertEquals((float) 0, ClassUtils.unboxed(Float.valueOf((float) 0)), ((float) 0));
-//        Assertions.assertEquals((double) 0, ClassUtils.unboxed(Double.valueOf((double) 0)), ((double) 0));
+        //        Assertions.assertEquals((float) 0, ClassUtils.unboxed(Float.valueOf((float) 0)), ((float) 0));
+        //        Assertions.assertEquals((double) 0, ClassUtils.unboxed(Double.valueOf((double) 0)), ((double) 0));
     }
 
     @Test
-    public void testGetSize() {
+    void testGetSize() {
         Assertions.assertEquals(0, ClassUtils.getSize(null));
         List<Integer> list = new ArrayList<>();
         list.add(1);
@@ -129,45 +136,31 @@ public class ClassUtilsTest {
     }
 
     @Test
-    public void testToUri() {
+    void testToUri() {
         Assertions.assertThrows(RuntimeException.class, () -> ClassUtils.toURI("#xx_abc#hello"));
     }
 
     @Test
-    public void testGetGenericClass() {
-        Assertions.assertTrue(TypeVariable.class.isAssignableFrom(ClassUtils.getGenericClass(GenericClass.class)));
-        Assertions.assertTrue(String.class.isAssignableFrom(ClassUtils.getGenericClass(GenericClass0.class)));
-        Assertions.assertTrue(Collection.class.isAssignableFrom(ClassUtils.getGenericClass(GenericClass1.class)));
-        Assertions.assertTrue(TypeVariable.class.isAssignableFrom(ClassUtils.getGenericClass(GenericClass2.class)));
-        Assertions.assertTrue(GenericArrayType.class.isAssignableFrom(ClassUtils.getGenericClass(GenericClass3.class)));
+    void testGetSizeMethod() {
+        Assertions.assertEquals("getLength()", ClassUtils.getSizeMethod(GenericClass3.class));
     }
 
     @Test
-    public void testGetSizeMethod() {
-        Assertions.assertEquals("getLength()", ClassUtils.getSizeMethod(GenericClass3.class));
-    }
-    
-    @Test
-    public void testGetSimpleClassName() {
+    void testGetSimpleClassName() {
         Assertions.assertNull(ClassUtils.getSimpleClassName(null));
         Assertions.assertEquals("Map", ClassUtils.getSimpleClassName(Map.class.getName()));
         Assertions.assertEquals("Map", ClassUtils.getSimpleClassName(Map.class.getSimpleName()));
     }
 
-    private interface GenericInterface<T> {
-    }
+    private interface GenericInterface<T> {}
 
-    private class GenericClass<T> implements GenericInterface<T> {
-    }
+    private class GenericClass<T> implements GenericInterface<T> {}
 
-    private class GenericClass0 implements GenericInterface<String> {
-    }
+    private class GenericClass0 implements GenericInterface<String> {}
 
-    private class GenericClass1 implements GenericInterface<Collection<String>> {
-    }
+    private class GenericClass1 implements GenericInterface<Collection<String>> {}
 
-    private class GenericClass2<T> implements GenericInterface<T[]> {
-    }
+    private class GenericClass2<T> implements GenericInterface<T[]> {}
 
     private class GenericClass3<T> implements GenericInterface<T[][]> {
         public int getLength() {
@@ -176,13 +169,11 @@ public class ClassUtilsTest {
     }
 
     private class PrivateHelloServiceImpl implements HelloService {
-        private PrivateHelloServiceImpl() {
-        }
+        private PrivateHelloServiceImpl() {}
 
         @Override
         public String sayHello() {
             return "Hello world!";
         }
     }
-
 }

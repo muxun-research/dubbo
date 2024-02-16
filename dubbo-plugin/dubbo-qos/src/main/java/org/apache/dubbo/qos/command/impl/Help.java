@@ -16,44 +16,56 @@
  */
 package org.apache.dubbo.qos.command.impl;
 
-import org.apache.dubbo.qos.command.BaseCommand;
-import org.apache.dubbo.qos.command.CommandContext;
-import org.apache.dubbo.qos.command.annotation.Cmd;
+import org.apache.dubbo.common.utils.ArrayUtils;
+import org.apache.dubbo.qos.api.BaseCommand;
+import org.apache.dubbo.qos.api.Cmd;
+import org.apache.dubbo.qos.api.CommandContext;
 import org.apache.dubbo.qos.command.util.CommandHelper;
 import org.apache.dubbo.qos.textui.TTable;
+import org.apache.dubbo.rpc.model.FrameworkModel;
 
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
-@Cmd(name = "help", summary = "help command", example = {
-        "help",
-        "help online"
-})
+@Cmd(
+        name = "help",
+        summary = "help command",
+        example = {"help", "help online"})
 public class Help implements BaseCommand {
-    @Override
-    public String execute(CommandContext commandContext, String[] args) {
-        if (args != null && args.length > 0) {
-            return commandHelp(args[0]);
-        } else {
-            return mainHelp();
-        }
 
+    private final CommandHelper commandHelper;
+
+    private static final String MAIN_HELP = "mainHelp";
+
+    private static final Map<String, String> processedTable = new WeakHashMap<>();
+
+    public Help(FrameworkModel frameworkModel) {
+        this.commandHelper = new CommandHelper(frameworkModel);
     }
 
+    @Override
+    public String execute(CommandContext commandContext, String[] args) {
+        if (ArrayUtils.isNotEmpty(args)) {
+            return processedTable.computeIfAbsent(args[0], this::commandHelp);
+        } else {
+            return processedTable.computeIfAbsent(MAIN_HELP, commandName -> mainHelp());
+        }
+    }
 
     private String commandHelp(String commandName) {
 
-        if (!CommandHelper.hasCommand(commandName)) {
+        if (!commandHelper.hasCommand(commandName)) {
             return "no such command:" + commandName;
         }
 
-        Class<?> clazz = CommandHelper.getCommandClass(commandName);
+        Class<?> clazz = commandHelper.getCommandClass(commandName);
 
         final Cmd cmd = clazz.getAnnotation(Cmd.class);
-        final TTable tTable = new TTable(new TTable.ColumnDefine[]{
-                new TTable.ColumnDefine(TTable.Align.RIGHT),
-                new TTable.ColumnDefine(80, false, TTable.Align.LEFT)
+        final TTable tTable = new TTable(new TTable.ColumnDefine[] {
+            new TTable.ColumnDefine(TTable.Align.RIGHT), new TTable.ColumnDefine(80, false, TTable.Align.LEFT)
         });
 
         tTable.addRow("COMMAND NAME", commandName);
@@ -68,7 +80,7 @@ public class Help implements BaseCommand {
     private String drawExample(Cmd cmd) {
         final StringBuilder drawExampleStringBuilder = new StringBuilder();
         for (String example : cmd.example()) {
-            drawExampleStringBuilder.append(example).append("\n");
+            drawExampleStringBuilder.append(example).append('\n');
         }
         return drawExampleStringBuilder.toString();
     }
@@ -78,12 +90,11 @@ public class Help implements BaseCommand {
      */
     private String mainHelp() {
 
-        final TTable tTable = new TTable(new TTable.ColumnDefine[]{
-                new TTable.ColumnDefine(TTable.Align.RIGHT),
-                new TTable.ColumnDefine(80, false, TTable.Align.LEFT)
+        final TTable tTable = new TTable(new TTable.ColumnDefine[] {
+            new TTable.ColumnDefine(TTable.Align.RIGHT), new TTable.ColumnDefine(80, false, TTable.Align.LEFT)
         });
 
-        final List<Class<?>> classes = CommandHelper.getAllCommandClass();
+        final List<Class<?>> classes = commandHelper.getAllCommandClass();
 
         Collections.sort(classes, new Comparator<Class<?>>() {
 
@@ -93,7 +104,6 @@ public class Help implements BaseCommand {
                 final Integer o2s = o2.getAnnotation(Cmd.class).sort();
                 return o1s.compareTo(o2s);
             }
-
         });
         for (Class<?> clazz : classes) {
 
@@ -101,7 +111,6 @@ public class Help implements BaseCommand {
                 final Cmd cmd = clazz.getAnnotation(Cmd.class);
                 tTable.addRow(cmd.name(), cmd.summary());
             }
-
         }
 
         return tTable.padding(1).rendering();

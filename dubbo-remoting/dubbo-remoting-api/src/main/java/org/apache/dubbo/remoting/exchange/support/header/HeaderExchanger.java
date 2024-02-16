@@ -23,7 +23,10 @@ import org.apache.dubbo.remoting.exchange.ExchangeClient;
 import org.apache.dubbo.remoting.exchange.ExchangeHandler;
 import org.apache.dubbo.remoting.exchange.ExchangeServer;
 import org.apache.dubbo.remoting.exchange.Exchanger;
+import org.apache.dubbo.remoting.exchange.PortUnificationExchanger;
 import org.apache.dubbo.remoting.transport.DecodeHandler;
+
+import static org.apache.dubbo.remoting.Constants.IS_PU_SERVER_KEY;
 
 /**
  * DefaultMessenger
@@ -36,12 +39,21 @@ public class HeaderExchanger implements Exchanger {
 
     @Override
     public ExchangeClient connect(URL url, ExchangeHandler handler) throws RemotingException {
-        return new HeaderExchangeClient(Transporters.connect(url, new DecodeHandler(new HeaderExchangeHandler(handler))), true);
+        return new HeaderExchangeClient(
+                Transporters.connect(url, new DecodeHandler(new HeaderExchangeHandler(handler))), true);
     }
 
     @Override
     public ExchangeServer bind(URL url, ExchangeHandler handler) throws RemotingException {
-        return new HeaderExchangeServer(Transporters.bind(url, new DecodeHandler(new HeaderExchangeHandler(handler))));
+        ExchangeServer server;
+        boolean isPuServerKey = url.getParameter(IS_PU_SERVER_KEY, false);
+        if (isPuServerKey) {
+            server = new HeaderExchangeServer(
+                    PortUnificationExchanger.bind(url, new DecodeHandler(new HeaderExchangeHandler(handler))));
+        } else {
+            server = new HeaderExchangeServer(
+                    Transporters.bind(url, new DecodeHandler(new HeaderExchangeHandler(handler))));
+        }
+        return server;
     }
-
 }

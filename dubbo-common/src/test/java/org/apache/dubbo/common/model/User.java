@@ -14,17 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.model;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * @author: fibbery
- * @date: 2019-05-13 18:41
- * @description: this class has no nullary constructor and some field is primitive
+ * this class has no nullary constructor and some field is primitive
  */
-public class User {
+public class User implements Serializable {
     private int age;
 
     private String name;

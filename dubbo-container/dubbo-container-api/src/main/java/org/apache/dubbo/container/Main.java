@@ -17,10 +17,9 @@
 package org.apache.dubbo.container;
 
 import org.apache.dubbo.common.extension.ExtensionLoader;
-import org.apache.dubbo.common.logger.Logger;
+import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.ArrayUtils;
-import org.apache.dubbo.common.utils.ConfigUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -31,6 +30,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.COMMON_THREAD_INTERRUPTED_EXCEPTION;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_START_DUBBO_ERROR;
+import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_STOP_DUBBO_ERROR;
 
 /**
  * Dubbo容器的主启动程序
@@ -41,9 +43,9 @@ public class Main {
 
     public static final String SHUTDOWN_HOOK_KEY = "dubbo.shutdown.hook";
 
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(Main.class);
 
-    private static final ExtensionLoader<Container> loader = ExtensionLoader.getExtensionLoader(Container.class);
+    private static final ExtensionLoader<Container> LOADER = ExtensionLoader.getExtensionLoader(Container.class);
 
     private static final ReentrantLock LOCK = new ReentrantLock();
 
@@ -53,13 +55,13 @@ public class Main {
         try {
 			// 如果没有传入配置，则使用默认的配置
             if (ArrayUtils.isEmpty(args)) {
-                String config = ConfigUtils.getProperty(CONTAINER_KEY, loader.getDefaultExtensionName());
+                String config = System.getProperty(CONTAINER_KEY, LOADER.getDefaultExtensionName());
                 args = COMMA_SPLIT_PATTERN.split(config);
             }
 
             final List<Container> containers = new ArrayList<Container>();
             for (int i = 0; i < args.length; i++) {
-                containers.add(loader.getExtension(args[i]));
+                containers.add(LOADER.getExtension(args[i]));
             }
             logger.info("Use container type(" + Arrays.toString(args) + ") to run dubbo serivce.");
 			// 如果使用JVM关闭的hook方法
@@ -74,7 +76,7 @@ public class Main {
                                 container.stop();
                                 logger.info("Dubbo " + container.getClass().getSimpleName() + " stopped!");
                             } catch (Throwable t) {
-                                logger.error(t.getMessage(), t);
+                                logger.error(CONFIG_STOP_DUBBO_ERROR, "", "", t.getMessage(), t);
                             }
                             try {
                                 LOCK.lock();
@@ -91,16 +93,22 @@ public class Main {
                 container.start();
                 logger.info("Dubbo " + container.getClass().getSimpleName() + " started!");
             }
-            System.out.println(new SimpleDateFormat("[yyyy-MM-dd HH:mm:ss]").format(new Date()) + " Dubbo service server started!");
+            System.out.println(new SimpleDateFormat("[yyyy-MM-dd HH:mm:ss]").format(new Date())
+                    + " Dubbo service server started!");
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
+            logger.error(CONFIG_START_DUBBO_ERROR, "", "", e.getMessage(), e);
             System.exit(1);
         }
         try {
             LOCK.lock();
             STOP.await();
         } catch (InterruptedException e) {
-            logger.warn("Dubbo service server stopped, interrupted by other thread!", e);
+            logger.warn(
+                    COMMON_THREAD_INTERRUPTED_EXCEPTION,
+                    "",
+                    "",
+                    "Dubbo service server stopped, interrupted by other thread!",
+                    e);
         } finally {
             LOCK.unlock();
         }

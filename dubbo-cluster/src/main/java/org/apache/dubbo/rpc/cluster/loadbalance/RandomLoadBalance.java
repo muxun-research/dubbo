@@ -17,11 +17,19 @@
 package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
+import org.apache.dubbo.rpc.cluster.ClusterInvoker;
+import org.apache.dubbo.rpc.support.RpcUtils;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static org.apache.dubbo.common.constants.CommonConstants.TIMESTAMP_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_SERVICE_REFERENCE_PATH;
+import static org.apache.dubbo.rpc.cluster.Constants.WEIGHT_KEY;
 
 /**
  * 随机从invoker列表中获取一个invoker
@@ -35,8 +43,9 @@ public class RandomLoadBalance extends AbstractLoadBalance {
 
     /**
      * Select one invoker between a list using a random criteria
-     * @param invokers List of possible invokers
-     * @param url URL
+     *
+     * @param invokers   List of possible invokers
+     * @param url        URL
      * @param invocation Invocation
      * @param <T>
      * @return The selected invoker
@@ -45,38 +54,77 @@ public class RandomLoadBalance extends AbstractLoadBalance {
     protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
 		// invoker的数量
         int length = invokers.size();
-		// 是否每个invoker拥有相同的权重，默认拥有相同的权重
+
+        if (!needWeightLoadBalance(invokers, invocation)) {
+            return invokers.get(ThreadLocalRandom.current().nextInt(length));
+        }
+        // 获取并设置权重
+        // 是否每个invoker拥有相同的权重，默认拥有相同的权重
+        // Every invoker has the same weight?
         boolean sameWeight = true;
-		// 用于记录每个invoker的权重
+        // the maxWeight of every invoker, the minWeight = 0 or the maxWeight of the last invoker
+        // 用于记录每个invoker的权重
         int[] weights = new int[length];
-		// 获取并设置权重
-        int firstWeight = getWeight(invokers.get(0), invocation);
-        weights[0] = firstWeight;
-		// 以及计算权重的总和
-        int totalWeight = firstWeight;
-        for (int i = 1; i < length; i++) {
+        // 以及计算权重的总和
+        int totalWeight = 0;
+        for (int i = 0; i < length; i++) {
             int weight = getWeight(invokers.get(i), invocation);
-            weights[i] = weight;
+            // Sum
             totalWeight += weight;
-			// 取出第一个的原因是将以第一个invoker的权重作为标杆，校验权重是否是不相同的
-			// 有一个权重不相同，即视为不相同，接下来不会进行相同的赋值操作
-            if (sameWeight && weight != firstWeight) {
+            // save for later use
+            weights[i] = totalWeight;
+            // 取出第一个的原因是将以第一个invoker的权重作为标杆，校验权重是否是不相同的
+            // 有一个权重不相同，即视为不相同，接下来不会进行相同的赋值操作
+            if (sameWeight && totalWeight != weight * (i + 1)) {
                 sameWeight = false;
             }
         }
 		// 处理invoker权重不同的情况
         if (totalWeight > 0 && !sameWeight) {
-			// 则取一个权重随机数，然后看落入到哪个invoker权重区间内，理论上，权重越大，区间越大，被选中的几率越高
+            // 则取一个权重随机数，然后看落入到哪个invoker权重区间内，理论上，权重越大，区间越大，被选中的几率越高// If (not every invoker has the same weight & at least one invoker's weight>0), select randomly based on
             int offset = ThreadLocalRandom.current().nextInt(totalWeight);
-            for (int i = 0; i < length; i++) {
-                offset -= weights[i];
-                if (offset < 0) {
-                    return invokers.get(i);
+            if (length <= 4) {
+                for (int i = 0; i < length; i++) {
+                    if (offset < weights[i]) {
+                        return invokers.get(i);
+                    }
                 }
+            } else {
+                int i = Arrays.binarySearch(weights, offset);
+                if (i < 0) {
+                    i = -i - 1;
+                } else {
+                    while (weights[i + 1] == offset) {
+                        i++;
+                    }
+                    i++;
+                }
+                return invokers.get(i);
             }
         }
 		// 如果所有invoker的权重相同，或者权重之和为0，则随机从invoker中选择一个
         return invokers.get(ThreadLocalRandom.current().nextInt(length));
     }
 
+    private <T> boolean needWeightLoadBalance(List<Invoker<T>> invokers, Invocation invocation) {
+        Invoker<T> invoker = invokers.get(0);
+        URL invokerUrl = invoker.getUrl();
+        if (invoker instanceof ClusterInvoker) {
+            invokerUrl = ((ClusterInvoker<?>) invoker).getRegistryUrl();
+        }
+
+        // Multiple registry scenario, load balance among multiple registries.
+        if (REGISTRY_SERVICE_REFERENCE_PATH.equals(invokerUrl.getServiceInterface())) {
+            String weight = invokerUrl.getParameter(WEIGHT_KEY);
+            return StringUtils.isNotEmpty(weight);
+        } else {
+            String weight = invokerUrl.getMethodParameter(RpcUtils.getMethodName(invocation), WEIGHT_KEY);
+            if (StringUtils.isNotEmpty(weight)) {
+                return true;
+            } else {
+                String timeStamp = invoker.getUrl().getParameter(TIMESTAMP_KEY);
+                return StringUtils.isNotEmpty(timeStamp);
+            }
+        }
+    }
 }

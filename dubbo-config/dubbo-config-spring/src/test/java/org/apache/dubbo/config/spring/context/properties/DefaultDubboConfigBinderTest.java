@@ -16,29 +16,39 @@
  */
 package org.apache.dubbo.config.spring.context.properties;
 
-
 import org.apache.dubbo.config.ApplicationConfig;
 import org.apache.dubbo.config.ProtocolConfig;
 import org.apache.dubbo.config.RegistryConfig;
+import org.apache.dubbo.config.bootstrap.DubboBootstrap;
 
-import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-@RunWith(SpringJUnit4ClassRunner.class)
-@TestPropertySource(locations = "classpath:/dubbo.properties")
+import static org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD;
+
+@ExtendWith(SpringExtension.class)
+@TestPropertySource(locations = "classpath:/dubbo-binder.properties")
 @ContextConfiguration(classes = DefaultDubboConfigBinder.class)
-public class DefaultDubboConfigBinderTest {
+@DirtiesContext(classMode = AFTER_EACH_TEST_METHOD)
+class DefaultDubboConfigBinderTest {
+
+    @BeforeAll
+    public static void setUp() {
+        DubboBootstrap.reset();
+    }
 
     @Autowired
     private DubboConfigBinder dubboConfigBinder;
 
     @Test
-    public void testBinder() {
+    void testBinder() {
 
         ApplicationConfig applicationConfig = new ApplicationConfig();
         dubboConfigBinder.bind("dubbo.application", applicationConfig);
@@ -52,6 +62,5 @@ public class DefaultDubboConfigBinderTest {
         ProtocolConfig protocolConfig = new ProtocolConfig();
         dubboConfigBinder.bind("dubbo.protocol", protocolConfig);
         Assertions.assertEquals(Integer.valueOf(20881), protocolConfig.getPort());
-
     }
 }

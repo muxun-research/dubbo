@@ -16,22 +16,28 @@
  */
 package org.apache.dubbo.remoting.transport;
 
-import java.io.IOException;
-
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.remoting.Channel;
-import org.hamcrest.CoreMatchers;
+import org.apache.dubbo.remoting.buffer.ChannelBuffer;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+
+import org.junit.jupiter.api.Test;
 import org.mockito.internal.verification.VerificationModeFactory;
 
 import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-public class AbstractCodecTest  {
+class AbstractCodecTest {
 
-    public void test_checkPayload_default8M() throws Exception {
+    @Test
+    void testCheckPayloadDefault8M() throws Exception {
         Channel channel = mock(Channel.class);
         given(channel.getUrl()).willReturn(URL.valueOf("dubbo://1.1.1.1"));
 
@@ -40,21 +46,80 @@ public class AbstractCodecTest  {
         try {
             AbstractCodec.checkPayload(channel, 15 * 1024 * 1024);
         } catch (IOException expected) {
-            assertThat(expected.getMessage(), allOf(
-                    CoreMatchers.containsString("Data length too large: "),
-                    CoreMatchers.containsString("max payload: " + 8 * 1024 * 1024)
-            ));
+            assertThat(
+                    expected.getMessage(),
+                    allOf(
+                            containsString("Data length too large: "),
+                            containsString("max payload: " + 8 * 1024 * 1024)));
         }
 
         verify(channel, VerificationModeFactory.atLeastOnce()).getUrl();
     }
 
-    public void test_checkPayload_minusPayloadNoLimit() throws Exception {
+    @Test
+    void testCheckProviderPayload() throws Exception {
+        Channel channel = mock(Channel.class);
+        given(channel.getUrl()).willReturn(URL.valueOf("dubbo://1.1.1.1"));
+
+        AbstractCodec.checkPayload(channel, 1024 * 1024 + 1, 1024 * 1024);
+
+        try {
+            AbstractCodec.checkPayload(channel, 1024 * 1024, 1024 * 1024);
+        } catch (IOException expected) {
+            assertThat(
+                    expected.getMessage(),
+                    allOf(containsString("Data length too large: "), containsString("max payload: " + 1024 * 1024)));
+        }
+
+        try {
+            AbstractCodec.checkPayload(channel, 0, 15 * 1024 * 1024);
+        } catch (IOException expected) {
+            assertThat(
+                    expected.getMessage(),
+                    allOf(
+                            containsString("Data length too large: "),
+                            containsString("max payload: " + 8 * 1024 * 1024)));
+        }
+
+        verify(channel, VerificationModeFactory.atLeastOnce()).getUrl();
+    }
+
+    @Test
+    void tesCheckPayloadMinusPayloadNoLimit() throws Exception {
         Channel channel = mock(Channel.class);
         given(channel.getUrl()).willReturn(URL.valueOf("dubbo://1.1.1.1?payload=-1"));
 
         AbstractCodec.checkPayload(channel, 15 * 1024 * 1024);
 
         verify(channel, VerificationModeFactory.atLeastOnce()).getUrl();
+    }
+
+    @Test
+    void testIsClientSide() {
+        AbstractCodec codec = getAbstractCodec();
+
+        Channel channel = mock(Channel.class);
+        given(channel.getRemoteAddress()).willReturn(new InetSocketAddress("172.24.157.13", 9103));
+        given(channel.getUrl()).willReturn(URL.valueOf("dubbo://172.24.157.13:9103"));
+        assertThat(codec.isClientSide(channel), is(true));
+        assertThat(codec.isServerSide(channel), is(false));
+
+        given(channel.getRemoteAddress()).willReturn(new InetSocketAddress("172.24.157.14", 9103));
+        given(channel.getUrl()).willReturn(URL.valueOf("dubbo://172.24.157.13:9103"));
+        assertThat(codec.isClientSide(channel), is(false));
+        assertThat(codec.isServerSide(channel), is(true));
+    }
+
+    private AbstractCodec getAbstractCodec() {
+        AbstractCodec codec = new AbstractCodec() {
+            @Override
+            public void encode(Channel channel, ChannelBuffer buffer, Object message) {}
+
+            @Override
+            public Object decode(Channel channel, ChannelBuffer buffer) {
+                return null;
+            }
+        };
+        return codec;
     }
 }

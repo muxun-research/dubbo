@@ -41,7 +41,7 @@ public interface DemoService {
 
     Type enumlength(Type... types);
 
-//	Type enumlength(Type type);
+    //    Type enumlength(Type type);
 
     String get(CustomArgument arg1);
 
@@ -61,4 +61,5 @@ public interface DemoService {
 
     CompletableFuture<Map<String, String>> testReturnType5(String str);
 
+    void $invoke(String s1, String s2);
 }

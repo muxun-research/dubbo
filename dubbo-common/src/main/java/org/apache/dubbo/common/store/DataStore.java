@@ -14,14 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.store;
 
+import org.apache.dubbo.common.extension.ExtensionScope;
 import org.apache.dubbo.common.extension.SPI;
 
 import java.util.Map;
 
-@SPI("simple")
+@SPI(value = "simple", scope = ExtensionScope.APPLICATION)
 public interface DataStore {
 
     /**
@@ -34,5 +34,4 @@ public interface DataStore {
     void put(String componentName, String key, Object value);
 
     void remove(String componentName, String key);
-
 }

@@ -14,45 +14,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.config;
-
-import com.alibaba.dubbo.config.ArgumentConfig;
-
-import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
+import com.alibaba.dubbo.config.ArgumentConfig;
+import org.junit.jupiter.api.Test;
+
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 
-public class ArgumentConfigTest {
+class ArgumentConfigTest {
     @Test
-    public void testIndex() throws Exception {
+    void testIndex() {
         ArgumentConfig argument = new ArgumentConfig();
         argument.setIndex(1);
         assertThat(argument.getIndex(), is(1));
     }
 
     @Test
-    public void testType() throws Exception {
+    void testType() {
         ArgumentConfig argument = new ArgumentConfig();
         argument.setType("int");
         assertThat(argument.getType(), equalTo("int"));
     }
 
     @Test
-    public void testCallback() throws Exception {
+    void testCallback() {
         ArgumentConfig argument = new ArgumentConfig();
         argument.setCallback(true);
         assertThat(argument.isCallback(), is(true));
     }
 
     @Test
-    public void testArguments() throws Exception {
+    void testArguments() {
         ArgumentConfig argument = new ArgumentConfig();
         argument.setIndex(1);
         argument.setType("int");

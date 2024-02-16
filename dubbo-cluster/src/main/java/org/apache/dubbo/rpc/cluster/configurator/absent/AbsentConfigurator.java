@@ -21,7 +21,6 @@ import org.apache.dubbo.rpc.cluster.configurator.AbstractConfigurator;
 
 /**
  * AbsentConfigurator
- *
  */
 public class AbsentConfigurator extends AbstractConfigurator {
 
@@ -33,5 +32,4 @@ public class AbsentConfigurator extends AbstractConfigurator {
     public URL doConfigure(URL currentUrl, URL configUrl) {
         return currentUrl.addParametersIfAbsent(configUrl.getParameters());
     }
-
 }

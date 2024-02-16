@@ -18,9 +18,11 @@ package org.apache.dubbo.rpc.cluster;
 
 import org.apache.dubbo.common.extension.Adaptive;
 import org.apache.dubbo.common.extension.SPI;
+import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.cluster.support.FailoverCluster;
+import org.apache.dubbo.rpc.model.ScopeModel;
+import org.apache.dubbo.rpc.model.ScopeModelUtil;
 
 /**
  * 集群
@@ -31,8 +33,10 @@ import org.apache.dubbo.rpc.cluster.support.FailoverCluster;
  * <a href="http://en.wikipedia.org/wiki/Fault-tolerant_system">Fault-Tolerant</a>
  *
  */
-@SPI(FailoverCluster.NAME)
+@SPI(Cluster.DEFAULT)
 public interface Cluster {
+
+    String DEFAULT = "failover";
 
     /**
 	 * 根据Directory，创建Invoker对象
@@ -44,6 +48,18 @@ public interface Cluster {
      * @throws RpcException
      */
     @Adaptive
-    <T> Invoker<T> join(Directory<T> directory) throws RpcException;
+    <T> Invoker<T> join(Directory<T> directory, boolean buildFilterChain) throws RpcException;
 
+    static Cluster getCluster(ScopeModel scopeModel, String name) {
+        return getCluster(scopeModel, name, true);
+    }
+
+    static Cluster getCluster(ScopeModel scopeModel, String name, boolean wrap) {
+        if (StringUtils.isEmpty(name)) {
+            name = Cluster.DEFAULT;
+        }
+        return ScopeModelUtil.getApplicationModel(scopeModel)
+                .getExtensionLoader(Cluster.class)
+                .getExtension(name, wrap);
+    }
 }

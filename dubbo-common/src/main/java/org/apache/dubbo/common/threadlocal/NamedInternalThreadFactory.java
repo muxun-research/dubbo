@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.common.threadlocal;
 
 import org.apache.dubbo.common.utils.NamedThreadFactory;
@@ -40,7 +39,7 @@ public class NamedInternalThreadFactory extends NamedThreadFactory {
     @Override
     public Thread newThread(Runnable runnable) {
         String name = mPrefix + mThreadNum.getAndIncrement();
-        InternalThread ret = new InternalThread(mGroup, runnable, name, 0);
+        InternalThread ret = new InternalThread(mGroup, InternalRunnable.Wrap(runnable), name, 0);
         ret.setDaemon(mDaemon);
         return ret;
     }

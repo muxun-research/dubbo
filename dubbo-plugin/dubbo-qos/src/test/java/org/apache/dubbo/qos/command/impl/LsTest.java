@@ -16,62 +16,93 @@
  */
 package org.apache.dubbo.qos.command.impl;
 
-import org.apache.dubbo.common.URL;
-import org.apache.dubbo.qos.command.CommandContext;
-import org.apache.dubbo.registry.integration.RegistryDirectory;
-import org.apache.dubbo.registry.support.ProviderConsumerRegTable;
-import org.apache.dubbo.registry.support.ProviderInvokerWrapper;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.common.utils.ClassUtils;
+import org.apache.dubbo.config.ReferenceConfig;
+import org.apache.dubbo.qos.DemoService;
+import org.apache.dubbo.qos.DemoServiceImpl;
+import org.apache.dubbo.qos.api.CommandContext;
+import org.apache.dubbo.rpc.model.AsyncMethodInfo;
 import org.apache.dubbo.rpc.model.ConsumerModel;
+import org.apache.dubbo.rpc.model.FrameworkModel;
+import org.apache.dubbo.rpc.model.ModuleServiceRepository;
 import org.apache.dubbo.rpc.model.ProviderModel;
+import org.apache.dubbo.rpc.model.ServiceDescriptor;
+import org.apache.dubbo.rpc.model.ServiceMetadata;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Map;
+class LsTest {
+    private FrameworkModel frameworkModel;
+    private ModuleServiceRepository repository;
 
-import static org.apache.dubbo.registry.support.ProviderConsumerRegTable.getProviderInvoker;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+    @BeforeEach
+    public void setUp() {
+        frameworkModel = new FrameworkModel();
+        repository = frameworkModel.newApplication().getDefaultModule().getServiceRepository();
+        registerProvider();
+        registerConsumer();
+    }
 
-public class LsTest {
+    @AfterEach
+    public void reset() {
+        frameworkModel.destroy();
+    }
+
     @Test
-    public void testExecute() throws Exception {
-        ConsumerModel consumerModel = mock(ConsumerModel.class);
-        when(consumerModel.getServiceName()).thenReturn("org.apache.dubbo.FooService");
-        ProviderModel providerModel = mock(ProviderModel.class);
-        when(providerModel.getServiceName()).thenReturn("org.apache.dubbo.BarService");
-        ApplicationModel.initConsumerModel("org.apache.dubbo.FooService", consumerModel);
-        ApplicationModel.initProviderModel("org.apache.dubbo.BarService", providerModel);
+    void testExecute() {
+        Ls ls = new Ls(frameworkModel);
+        String result = ls.execute(Mockito.mock(CommandContext.class), new String[0]);
+        System.out.println(result);
+        /**
+         * As Provider side:
+         * +--------------------------------+---+
+         * |      Provider Service Name     |PUB|
+         * +--------------------------------+---+
+         * |org.apache.dubbo.qos.DemoService| N |
+         * +--------------------------------+---+
+         * As Consumer side:
+         * +--------------------------------+---+
+         * |      Consumer Service Name     |NUM|
+         * +--------------------------------+---+
+         * |org.apache.dubbo.qos.DemoService| 0 |
+         * +--------------------------------+---+
+         */
+    }
 
-        Invoker providerInvoker = mock(Invoker.class);
-        URL registryUrl = mock(URL.class);
-        when(registryUrl.toFullString()).thenReturn("test://localhost:8080");
-        URL providerUrl = mock(URL.class);
-        when(providerUrl.getServiceKey()).thenReturn("org.apache.dubbo.BarService");
-        when(providerUrl.toFullString()).thenReturn("dubbo://localhost:8888/org.apache.dubbo.BarService");
-        when(providerInvoker.getUrl()).thenReturn(providerUrl);
-        ProviderConsumerRegTable.registerProvider(providerInvoker, registryUrl, providerUrl);
-        for (ProviderInvokerWrapper wrapper : getProviderInvoker("org.apache.dubbo.BarService")) {
-            wrapper.setReg(true);
-        }
+    private void registerProvider() {
+        ServiceDescriptor serviceDescriptor = repository.registerService(DemoService.class);
+        ServiceMetadata serviceMetadata = new ServiceMetadata();
+        serviceMetadata.setServiceKey(DemoService.class.getName());
+        ProviderModel providerModel = new ProviderModel(
+                DemoService.class.getName(),
+                new DemoServiceImpl(),
+                serviceDescriptor,
+                null,
+                serviceMetadata,
+                ClassUtils.getClassLoader(DemoService.class));
+        repository.registerProvider(providerModel);
+    }
 
-        Invoker consumerInvoker = mock(Invoker.class);
-        URL consumerUrl = mock(URL.class);
-        when(consumerUrl.getServiceKey()).thenReturn("org.apache.dubbo.FooService");
-        when(consumerUrl.toFullString()).thenReturn("dubbo://localhost:8888/org.apache.dubbo.FooService");
-        when(consumerInvoker.getUrl()).thenReturn(consumerUrl);
-        RegistryDirectory directory = mock(RegistryDirectory.class);
-        Map invokers = Mockito.mock(Map.class);
-        when(invokers.size()).thenReturn(100);
-        when(directory.getUrlInvokerMap()).thenReturn(invokers);
-        ProviderConsumerRegTable.registerConsumer(consumerInvoker, registryUrl, consumerUrl, directory);
-
-        Ls ls = new Ls();
-        String output = ls.execute(mock(CommandContext.class), null);
-        assertThat(output, containsString("org.apache.dubbo.FooService|100"));
-        assertThat(output, containsString("org.apache.dubbo.BarService| Y"));
+    private void registerConsumer() {
+        ServiceDescriptor serviceDescriptor = repository.registerService(DemoService.class);
+        ReferenceConfig referenceConfig = new ReferenceConfig();
+        referenceConfig.setInterface(DemoService.class);
+        ServiceMetadata serviceMetadata = new ServiceMetadata();
+        serviceMetadata.setServiceKey(DemoService.class.getName());
+        Map<String, AsyncMethodInfo> methodConfigs = new HashMap<>();
+        ConsumerModel consumerModel = new ConsumerModel(
+                serviceMetadata.getServiceKey(),
+                null,
+                serviceDescriptor,
+                serviceMetadata,
+                methodConfigs,
+                referenceConfig.getInterfaceClassLoader());
+        repository.registerConsumer(consumerModel);
     }
 }

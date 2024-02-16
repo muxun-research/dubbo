@@ -18,6 +18,7 @@ package org.apache.dubbo.remoting;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.Adaptive;
+import org.apache.dubbo.common.extension.ExtensionScope;
 import org.apache.dubbo.common.extension.SPI;
 
 /**
@@ -29,29 +30,28 @@ import org.apache.dubbo.common.extension.SPI;
  * <a href="http://en.wikipedia.org/wiki/Client%E2%80%93server_model">Client/Server</a>
  * @see org.apache.dubbo.remoting.Transporters
  */
-@SPI("netty")
+@SPI(value = "netty", scope = ExtensionScope.FRAMEWORK)
 public interface Transporter {
 
-	/**
-	 * 绑定一个服务器
-	 * @param url     服务器URL
-	 * @param handler Channel处理器
-	 * @return server 绑定的服务器
-	 * @throws RemotingException
-	 * @see org.apache.dubbo.remoting.Transporters#bind(URL, ChannelHandler...)
-	 */
-	@Adaptive({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})
-	Server bind(URL url, ChannelHandler handler) throws RemotingException;
+    /**
+     * 绑定一个服务器
+     * @param url     服务器URL
+     * @param handler Channel处理器
+     * @return server 绑定的服务器
+     * @throws RemotingException
+     * @see org.apache.dubbo.remoting.Transporters#bind(URL, ChannelHandler...)
+     */
+    @Adaptive({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})
+    RemotingServer bind(URL url, ChannelHandler handler) throws RemotingException;
 
-	/**
-	 * 连接指定服务器
-	 * @param url     服务器URL
-	 * @param handler Channel处理器
-	 * @return client 产生连接的客户端
-	 * @throws RemotingException
-	 * @see org.apache.dubbo.remoting.Transporters#connect(URL, ChannelHandler...)
-	 */
-	@Adaptive({Constants.CLIENT_KEY, Constants.TRANSPORTER_KEY})
-	Client connect(URL url, ChannelHandler handler) throws RemotingException;
-
+    /**
+     * 连接指定服务器
+     * @param url     服务器URL
+     * @param handler Channel处理器
+     * @return client 产生连接的客户端
+     * @throws RemotingException
+     * @see org.apache.dubbo.remoting.Transporters#connect(URL, ChannelHandler...)
+     */
+    @Adaptive({Constants.CLIENT_KEY, Constants.TRANSPORTER_KEY})
+    Client connect(URL url, ChannelHandler handler) throws RemotingException;
 }

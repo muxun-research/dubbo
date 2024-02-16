@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.rpc.protocol.dubbo;
 
 /**
@@ -32,7 +31,7 @@ public interface Constants {
 
     String DECODE_IN_IO_THREAD_KEY = "decode.in.io";
 
-    boolean DEFAULT_DECODE_IN_IO_THREAD = true;
+    boolean DEFAULT_DECODE_IN_IO_THREAD = false;
 
     /**
      * callback inst id
@@ -49,21 +48,15 @@ public interface Constants {
     String CHANNEL_CALLBACK_KEY = "channel.callback.invokers.key";
 
     /**
-     * The initial state for lazy connection
+     * when this warning rises from invocation, program probably have a bug.
      */
-    String LAZY_CONNECT_INITIAL_STATE_KEY = "connect.lazy.initial.state";
+    String LAZY_REQUEST_WITH_WARNING_KEY = "lazyclient_request_with_warning";
 
-    /**
-     * The default value of lazy connection's initial state: true
-     *
-     * @see #LAZY_CONNECT_INITIAL_STATE_KEY
-     */
-    boolean DEFAULT_LAZY_CONNECT_INITIAL_STATE = true;
-
-    String OPTIMIZER_KEY = "optimizer";
+    boolean DEFAULT_LAZY_REQUEST_WITH_WARNING = false;
 
     String ON_CONNECT_KEY = "onconnect";
 
     String ON_DISCONNECT_KEY = "ondisconnect";
 
+    String ASYNC_METHOD_INFO = "async-method-info";
 }

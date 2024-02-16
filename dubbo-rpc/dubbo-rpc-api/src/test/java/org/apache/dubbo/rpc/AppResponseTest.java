@@ -16,13 +16,16 @@
  */
 package org.apache.dubbo.rpc;
 
+import java.util.HashMap;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class AppResponseTest {
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+
+class AppResponseTest {
     @Test
-    public void testAppResponseWithNormalException() {
+    void testAppResponseWithNormalException() {
         NullPointerException npe = new NullPointerException();
         AppResponse appResponse = new AppResponse(npe);
 
@@ -35,20 +38,18 @@ public class AppResponseTest {
      * please run this test in Run mode
      */
     @Test
-    public void testAppResponseWithEmptyStackTraceException() {
+    void testAppResponseWithEmptyStackTraceException() {
         Throwable throwable = buildEmptyStackTraceException();
-        if (throwable == null) {
-            return;
-        }
+        assumeFalse(throwable == null);
         AppResponse appResponse = new AppResponse(throwable);
 
         StackTraceElement[] stackTrace = appResponse.getException().getStackTrace();
         Assertions.assertNotNull(stackTrace);
-        Assertions.assertEquals(0,stackTrace.length);
+        Assertions.assertEquals(0, stackTrace.length);
     }
 
     @Test
-    public void testSetExceptionWithNormalException() {
+    void testSetExceptionWithNormalException() {
         NullPointerException npe = new NullPointerException();
         AppResponse appResponse = new AppResponse();
         appResponse.setException(npe);
@@ -62,17 +63,15 @@ public class AppResponseTest {
      * please run this test in Run mode
      */
     @Test
-    public void testSetExceptionWithEmptyStackTraceException() {
+    void testSetExceptionWithEmptyStackTraceException() {
         Throwable throwable = buildEmptyStackTraceException();
-        if (throwable == null) {
-            return;
-        }
+        assumeFalse(throwable == null);
         AppResponse appResponse = new AppResponse();
         appResponse.setException(throwable);
 
         StackTraceElement[] stackTrace = appResponse.getException().getStackTrace();
         Assertions.assertNotNull(stackTrace);
-        Assertions.assertEquals(0,stackTrace.length);
+        Assertions.assertEquals(0, stackTrace.length);
     }
 
     private Throwable buildEmptyStackTraceException() {
@@ -90,7 +89,7 @@ public class AppResponseTest {
             }
         }
         /**
-         * may be there is -XX:-OmitStackTraceInFastThrow or run in Debug mode
+         * maybe there is -XX:-OmitStackTraceInFastThrow or run in Debug mode
          */
         if (throwable == null) {
             System.out.println("###buildEmptyStackTraceException fail to construct NPE");
@@ -99,5 +98,26 @@ public class AppResponseTest {
         // end construct a NullPointerException with empty stackTrace
 
         return throwable;
+    }
+
+    @Test
+    void testObjectAttachment() {
+        AppResponse response = new AppResponse();
+
+        response.setAttachment("objectKey1", "value1");
+        response.setAttachment("objectKey2", "value2");
+        response.setAttachment("objectKey3", 1); // object
+
+        Assertions.assertEquals("value1", response.getObjectAttachment("objectKey1"));
+        Assertions.assertEquals("value2", response.getAttachment("objectKey2"));
+        Assertions.assertNull(response.getAttachment("objectKey3"));
+        Assertions.assertEquals(1, response.getObjectAttachment("objectKey3"));
+        Assertions.assertEquals(3, response.getObjectAttachments().size());
+
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("mapKey1", 1);
+        map.put("mapKey2", "mapValue2");
+        response.setObjectAttachments(map);
+        Assertions.assertEquals(map, response.getObjectAttachments());
     }
 }

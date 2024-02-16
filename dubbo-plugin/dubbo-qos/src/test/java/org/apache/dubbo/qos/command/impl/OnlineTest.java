@@ -17,46 +17,86 @@
 package org.apache.dubbo.qos.command.impl;
 
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.qos.command.CommandContext;
-import org.apache.dubbo.registry.Registry;
-import org.apache.dubbo.registry.support.ProviderConsumerRegTable;
-import org.apache.dubbo.registry.support.ProviderInvokerWrapper;
-import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.common.utils.ClassUtils;
+import org.apache.dubbo.qos.DemoService;
+import org.apache.dubbo.qos.DemoServiceImpl;
+import org.apache.dubbo.qos.api.CommandContext;
+import org.apache.dubbo.registry.RegistryService;
+import org.apache.dubbo.rpc.model.FrameworkModel;
+import org.apache.dubbo.rpc.model.ModuleServiceRepository;
 import org.apache.dubbo.rpc.model.ProviderModel;
+import org.apache.dubbo.rpc.model.ServiceDescriptor;
+import org.apache.dubbo.rpc.model.ServiceMetadata;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.dubbo.registry.support.ProviderConsumerRegTable.getProviderInvoker;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_TYPE_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.SERVICE_REGISTRY_TYPE;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-public class OnlineTest {
+/**
+ * {@link BaseOnline}
+ * {@link Online}
+ * {@link OnlineApp}
+ * {@link OnlineInterface}
+ */
+class OnlineTest {
+    private FrameworkModel frameworkModel;
+    private ModuleServiceRepository repository;
+    private ProviderModel.RegisterStatedURL registerStatedURL;
+
+    @BeforeEach
+    public void setUp() {
+        frameworkModel = new FrameworkModel();
+        repository = frameworkModel.newApplication().getDefaultModule().getServiceRepository();
+        registerProvider();
+    }
+
+    @AfterEach
+    public void reset() {
+        frameworkModel.destroy();
+    }
+
     @Test
-    public void testExecute() throws Exception {
-        ProviderModel providerModel = mock(ProviderModel.class);
-        when(providerModel.getServiceName()).thenReturn("org.apache.dubbo.BarService");
-        ApplicationModel.initProviderModel("org.apache.dubbo.BarService", providerModel);
+    void testExecute() {
+        Online online = new Online(frameworkModel);
+        String result = online.execute(mock(CommandContext.class), new String[] {DemoService.class.getName()});
+        Assertions.assertEquals(result, "OK");
+        Assertions.assertTrue(registerStatedURL.isRegistered());
 
-        Invoker providerInvoker = mock(Invoker.class);
-        URL registryUrl = mock(URL.class);
-        when(registryUrl.toFullString()).thenReturn("test://localhost:8080");
-        URL providerUrl = mock(URL.class);
-        when(providerUrl.getServiceKey()).thenReturn("org.apache.dubbo.BarService");
-        when(providerUrl.toFullString()).thenReturn("dubbo://localhost:8888/org.apache.dubbo.BarService");
-        when(providerInvoker.getUrl()).thenReturn(providerUrl);
-        ProviderConsumerRegTable.registerProvider(providerInvoker, registryUrl, providerUrl);
+        OnlineInterface onlineInterface = new OnlineInterface(frameworkModel);
+        registerStatedURL.setRegistered(false);
+        result = onlineInterface.execute(mock(CommandContext.class), new String[] {DemoService.class.getName()});
+        Assertions.assertEquals(result, "OK");
+        Assertions.assertTrue(registerStatedURL.isRegistered());
 
-        Registry registry = mock(Registry.class);
-        TestRegistryFactory.registry = registry;
+        registerStatedURL.setRegistered(false);
+        registerStatedURL.setRegistryUrl(URL.valueOf("test://127.0.0.1:2181/" + RegistryService.class.getName())
+                .addParameter(REGISTRY_TYPE_KEY, SERVICE_REGISTRY_TYPE));
+        OnlineApp onlineApp = new OnlineApp(frameworkModel);
+        result = onlineApp.execute(mock(CommandContext.class), new String[] {DemoService.class.getName()});
+        Assertions.assertEquals(result, "OK");
+        Assertions.assertTrue(registerStatedURL.isRegistered());
+    }
 
-        Online online = new Online();
-        String output = online.execute(mock(CommandContext.class), new String[]{"org.apache.dubbo.BarService"});
-        assertThat(output, equalTo("OK"));
-        for (ProviderInvokerWrapper wrapper : getProviderInvoker("org.apache.dubbo.BarService")) {
-            assertTrue(wrapper.isReg());
-        }
+    private void registerProvider() {
+        ServiceDescriptor serviceDescriptor = repository.registerService(DemoService.class);
+        ServiceMetadata serviceMetadata = new ServiceMetadata();
+        serviceMetadata.setServiceKey(DemoService.class.getName());
+        ProviderModel providerModel = new ProviderModel(
+                DemoService.class.getName(),
+                new DemoServiceImpl(),
+                serviceDescriptor,
+                serviceMetadata,
+                ClassUtils.getClassLoader(DemoService.class));
+        registerStatedURL = new ProviderModel.RegisterStatedURL(
+                URL.valueOf("dubbo://127.0.0.1:20880/" + DemoService.class.getName()),
+                URL.valueOf("test://127.0.0.1:2181/" + RegistryService.class.getName()),
+                false);
+        providerModel.addStatedUrl(registerStatedURL);
+        repository.registerProvider(providerModel);
     }
 }

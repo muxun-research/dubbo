@@ -16,16 +16,22 @@
  */
 package org.apache.dubbo.common.extension;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.StringUtils;
+import org.apache.dubbo.rpc.model.ScopeModel;
+import org.apache.dubbo.rpc.model.ScopeModelUtil;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Code generator for Adaptive class
@@ -34,7 +40,7 @@ public class AdaptiveClassCodeGenerator {
 
     private static final Logger logger = LoggerFactory.getLogger(AdaptiveClassCodeGenerator.class);
 
-    private static final String CLASSNAME_INVOCATION = "org.apache.dubbo.rpc.Invocation";
+    private static final String CLASS_NAME_INVOCATION = "org.apache.dubbo.rpc.Invocation";
 
     private static final String CODE_PACKAGE = "package %s;\n";
 
@@ -48,26 +54,31 @@ public class AdaptiveClassCodeGenerator {
 
     private static final String CODE_METHOD_THROWS = "throws %s";
 
-    private static final String CODE_UNSUPPORTED = "throw new UnsupportedOperationException(\"The method %s of interface %s is not adaptive method!\");\n";
+    private static final String CODE_UNSUPPORTED =
+            "throw new UnsupportedOperationException(\"The method %s of interface %s is not adaptive method!\");\n";
 
-    private static final String CODE_URL_NULL_CHECK = "if (arg%d == null) throw new IllegalArgumentException(\"url == null\");\n%s url = arg%d;\n";
+    private static final String CODE_URL_NULL_CHECK =
+            "if (arg%d == null) throw new IllegalArgumentException(\"url == null\");\n%s url = arg%d;\n";
 
     private static final String CODE_EXT_NAME_ASSIGNMENT = "String extName = %s;\n";
 
     private static final String CODE_EXT_NAME_NULL_CHECK = "if(extName == null) "
-                    + "throw new IllegalStateException(\"Failed to get extension (%s) name from url (\" + url.toString() + \") use keys(%s)\");\n";
+            + "throw new IllegalStateException(\"Failed to get extension (%s) name from url (\" + url.toString() + \") use keys(%s)\");\n";
 
-    private static final String CODE_INVOCATION_ARGUMENT_NULL_CHECK = "if (arg%d == null) throw new IllegalArgumentException(\"invocation == null\"); "
+    private static final String CODE_INVOCATION_ARGUMENT_NULL_CHECK =
+            "if (arg%d == null) throw new IllegalArgumentException(\"invocation == null\"); "
                     + "String methodName = arg%d.getMethodName();\n";
 
-
-    private static final String CODE_EXTENSION_ASSIGNMENT = "%s extension = (%<s)%s.getExtensionLoader(%s.class).getExtension(extName);\n";
+    private static final String CODE_SCOPE_MODEL_ASSIGNMENT =
+            "ScopeModel scopeModel = ScopeModelUtil.getOrDefault(url.getScopeModel(), %s.class);\n";
+    private static final String CODE_EXTENSION_ASSIGNMENT =
+            "%s extension = (%<s)scopeModel.getExtensionLoader(%s.class).getExtension(extName);\n";
 
     private static final String CODE_EXTENSION_METHOD_INVOKE_ARGUMENT = "arg%d";
 
     private final Class<?> type;
 
-    private String defaultExtName;
+    private final String defaultExtName;
 
     public AdaptiveClassCodeGenerator(Class<?> type, String defaultExtName) {
         this.type = type;
@@ -75,7 +86,7 @@ public class AdaptiveClassCodeGenerator {
     }
 
     /**
-     * test if given type has at least one method annotated with <code>SPI</code>
+     * test if given type has at least one method annotated with <code>Adaptive</code>
      */
     private boolean hasAdaptiveMethod() {
         return Arrays.stream(type.getMethods()).anyMatch(m -> m.isAnnotationPresent(Adaptive.class));
@@ -85,9 +96,18 @@ public class AdaptiveClassCodeGenerator {
      * generate and return class code
      */
     public String generate() {
+        return this.generate(false);
+    }
+
+    /**
+     * generate and return class code
+     * @param sort - whether sort methods
+     */
+    public String generate(boolean sort) {
         // no need to generate adaptive class since there's no adaptive method found.
         if (!hasAdaptiveMethod()) {
-            throw new IllegalStateException("No adaptive method exist on extension " + type.getName() + ", refuse to create the adaptive class!");
+            throw new IllegalStateException("No adaptive method exist on extension " + type.getName()
+                    + ", refuse to create the adaptive class!");
         }
 
         StringBuilder code = new StringBuilder();
@@ -96,10 +116,13 @@ public class AdaptiveClassCodeGenerator {
         code.append(generateClassDeclaration());
 
         Method[] methods = type.getMethods();
+        if (sort) {
+            Arrays.sort(methods, Comparator.comparing(Method::toString));
+        }
         for (Method method : methods) {
             code.append(generateMethod(method));
         }
-        code.append("}");
+        code.append('}');
 
         if (logger.isDebugEnabled()) {
             logger.debug(code.toString());
@@ -118,7 +141,10 @@ public class AdaptiveClassCodeGenerator {
      * generate imports
      */
     private String generateImports() {
-        return String.format(CODE_IMPORTS, ExtensionLoader.class.getName());
+        StringBuilder builder = new StringBuilder();
+        builder.append(String.format(CODE_IMPORTS, ScopeModel.class.getName()));
+        builder.append(String.format(CODE_IMPORTS, ScopeModelUtil.class.getName()));
+        return builder.toString();
     }
 
     /**
@@ -159,7 +185,8 @@ public class AdaptiveClassCodeGenerator {
         String methodContent = generateMethodContent(method);
         String methodArgs = generateMethodArguments(method);
         String methodThrows = generateMethodThrows(method);
-        return String.format(CODE_METHOD_DECLARATION, methodReturnType, methodName, methodArgs, methodThrows, methodContent);
+        return String.format(
+                CODE_METHOD_DECLARATION, methodReturnType, methodName, methodArgs, methodThrows, methodContent);
     }
 
     /**
@@ -168,8 +195,8 @@ public class AdaptiveClassCodeGenerator {
     private String generateMethodArguments(Method method) {
         Class<?>[] pts = method.getParameterTypes();
         return IntStream.range(0, pts.length)
-                        .mapToObj(i -> String.format(CODE_METHOD_ARGUMENT, pts[i].getCanonicalName(), i))
-                        .collect(Collectors.joining(", "));
+                .mapToObj(i -> String.format(CODE_METHOD_ARGUMENT, pts[i].getCanonicalName(), i))
+                .collect(Collectors.joining(", "));
     }
 
     /**
@@ -222,6 +249,7 @@ public class AdaptiveClassCodeGenerator {
             // check extName == null?
             code.append(generateExtNameNullCheck(value));
 
+            code.append(generateScopeModelAssignment());
             code.append(generateExtensionAssignment());
 
             // return statement
@@ -239,7 +267,7 @@ public class AdaptiveClassCodeGenerator {
     }
 
     /**
-     * generate extName assigment code
+     * generate extName assignment code
      */
     private String generateExtNameAssignment(String[] value, boolean hasInvocation) {
         // TODO: refactor it
@@ -247,19 +275,22 @@ public class AdaptiveClassCodeGenerator {
         for (int i = value.length - 1; i >= 0; --i) {
             if (i == value.length - 1) {
                 if (null != defaultExtName) {
-                    if (!"protocol".equals(value[i])) {
+                    if (!CommonConstants.PROTOCOL_KEY.equals(value[i])) {
                         if (hasInvocation) {
-                            getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                            getNameCode = String.format(
+                                    "url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
                         } else {
                             getNameCode = String.format("url.getParameter(\"%s\", \"%s\")", value[i], defaultExtName);
                         }
                     } else {
-                        getNameCode = String.format("( url.getProtocol() == null ? \"%s\" : url.getProtocol() )", defaultExtName);
+                        getNameCode = String.format(
+                                "( url.getProtocol() == null ? \"%s\" : url.getProtocol() )", defaultExtName);
                     }
                 } else {
-                    if (!"protocol".equals(value[i])) {
+                    if (!CommonConstants.PROTOCOL_KEY.equals(value[i])) {
                         if (hasInvocation) {
-                            getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                            getNameCode = String.format(
+                                    "url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
                         } else {
                             getNameCode = String.format("url.getParameter(\"%s\")", value[i]);
                         }
@@ -268,9 +299,10 @@ public class AdaptiveClassCodeGenerator {
                     }
                 }
             } else {
-                if (!"protocol".equals(value[i])) {
+                if (!CommonConstants.PROTOCOL_KEY.equals(value[i])) {
                     if (hasInvocation) {
-                        getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                        getNameCode = String.format(
+                                "url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
                     } else {
                         getNameCode = String.format("url.getParameter(\"%s\", %s)", value[i], getNameCode);
                     }
@@ -286,8 +318,12 @@ public class AdaptiveClassCodeGenerator {
     /**
      * @return
      */
+    private String generateScopeModelAssignment() {
+        return String.format(CODE_SCOPE_MODEL_ASSIGNMENT, type.getName());
+    }
+
     private String generateExtensionAssignment() {
-        return String.format(CODE_EXTENSION_ASSIGNMENT, type.getName(), ExtensionLoader.class.getSimpleName(), type.getName());
+        return String.format(CODE_EXTENSION_ASSIGNMENT, type.getName(), type.getName());
     }
 
     /**
@@ -308,7 +344,7 @@ public class AdaptiveClassCodeGenerator {
      */
     private boolean hasInvocationArgument(Method method) {
         Class<?>[] pts = method.getParameterTypes();
-        return Arrays.stream(pts).anyMatch(p -> CLASSNAME_INVOCATION.equals(p.getName()));
+        return Arrays.stream(pts).anyMatch(p -> CLASS_NAME_INVOCATION.equals(p.getName()));
     }
 
     /**
@@ -316,9 +352,11 @@ public class AdaptiveClassCodeGenerator {
      */
     private String generateInvocationArgumentNullCheck(Method method) {
         Class<?>[] pts = method.getParameterTypes();
-        return IntStream.range(0, pts.length).filter(i -> CLASSNAME_INVOCATION.equals(pts[i].getName()))
-                        .mapToObj(i -> String.format(CODE_INVOCATION_ARGUMENT_NULL_CHECK, i, i))
-                        .findFirst().orElse("");
+        return IntStream.range(0, pts.length)
+                .filter(i -> CLASS_NAME_INVOCATION.equals(pts[i].getName()))
+                .mapToObj(i -> String.format(CODE_INVOCATION_ARGUMENT_NULL_CHECK, i, i))
+                .findFirst()
+                .orElse("");
     }
 
     /**
@@ -329,7 +367,7 @@ public class AdaptiveClassCodeGenerator {
         // value is not set, use the value generated from class name as the key
         if (value.length == 0) {
             String splitName = StringUtils.camelToSplitName(type.getSimpleName(), ".");
-            value = new String[]{splitName};
+            value = new String[] {splitName};
         }
         return value;
     }
@@ -344,6 +382,7 @@ public class AdaptiveClassCodeGenerator {
     private String generateUrlAssignmentIndirectly(Method method) {
         Class<?>[] pts = method.getParameterTypes();
 
+        Map<String, Integer> getterReturnUrl = new HashMap<>();
         // find URL getter method
         for (int i = 0; i < pts.length; ++i) {
             for (Method m : pts[i].getMethods()) {
@@ -353,15 +392,25 @@ public class AdaptiveClassCodeGenerator {
                         && !Modifier.isStatic(m.getModifiers())
                         && m.getParameterTypes().length == 0
                         && m.getReturnType() == URL.class) {
-                    return generateGetUrlNullCheck(i, pts[i], name);
+                    getterReturnUrl.put(name, i);
                 }
             }
         }
 
-        // getter method not found, throw
-        throw new IllegalStateException("Failed to create adaptive class for interface " + type.getName()
-                        + ": not found url parameter or url attribute in parameters of method " + method.getName());
+        if (getterReturnUrl.size() <= 0) {
+            // getter method not found, throw
+            throw new IllegalStateException("Failed to create adaptive class for interface " + type.getName()
+                    + ": not found url parameter or url attribute in parameters of method " + method.getName());
+        }
 
+        Integer index = getterReturnUrl.get("getUrl");
+        if (index != null) {
+            return generateGetUrlNullCheck(index, pts[index], "getUrl");
+        } else {
+            Map.Entry<String, Integer> entry =
+                    getterReturnUrl.entrySet().iterator().next();
+            return generateGetUrlNullCheck(entry.getValue(), pts[entry.getValue()], entry.getKey());
+        }
     }
 
     /**
@@ -372,13 +421,14 @@ public class AdaptiveClassCodeGenerator {
     private String generateGetUrlNullCheck(int index, Class<?> type, String method) {
         // Null point check
         StringBuilder code = new StringBuilder();
-        code.append(String.format("if (arg%d == null) throw new IllegalArgumentException(\"%s argument == null\");\n",
+        code.append(String.format(
+                "if (arg%d == null) throw new IllegalArgumentException(\"%s argument == null\");\n",
                 index, type.getName()));
-        code.append(String.format("if (arg%d.%s() == null) throw new IllegalArgumentException(\"%s argument %s() == null\");\n",
+        code.append(String.format(
+                "if (arg%d.%s() == null) throw new IllegalArgumentException(\"%s argument %s() == null\");\n",
                 index, method, type.getName(), method));
 
         code.append(String.format("%s url = arg%d.%s();\n", URL.class.getName(), index, method));
         return code.toString();
     }
-
 }

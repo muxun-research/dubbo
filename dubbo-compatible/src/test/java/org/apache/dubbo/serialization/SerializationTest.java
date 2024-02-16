@@ -14,16 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.serialization;
 
 import org.apache.dubbo.common.serialize.ObjectInput;
 import org.apache.dubbo.common.serialize.ObjectOutput;
-
-import org.hamcrest.CoreMatchers;
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,11 +25,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import static org.hamcrest.Matchers.is;
+import org.hamcrest.CoreMatchers;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.mock;
 
-public class SerializationTest {
+class SerializationTest {
 
     private MySerialization mySerialization;
 
@@ -53,29 +52,29 @@ public class SerializationTest {
     }
 
     @Test
-    public void testContentType() {
+    void testContentType() {
         assertThat(mySerialization.getContentType(), is("x-application/my"));
     }
 
     @Test
-    public void testContentTypeId() {
+    void testContentTypeId() {
         assertThat(mySerialization.getContentTypeId(), is((byte) 101));
     }
 
     @Test
-    public void testObjectOutput() throws IOException {
+    void testObjectOutput() throws IOException {
         ObjectOutput objectOutput = mySerialization.serialize(null, mock(OutputStream.class));
         assertThat(objectOutput, Matchers.<ObjectOutput>instanceOf(MyObjectOutput.class));
     }
 
     @Test
-    public void testObjectInput() throws IOException {
+    void testObjectInput() throws IOException {
         ObjectInput objectInput = mySerialization.deserialize(null, mock(InputStream.class));
         assertThat(objectInput, Matchers.<ObjectInput>instanceOf(MyObjectInput.class));
     }
 
     @Test
-    public void testWriteUTF() throws IOException {
+    void testWriteUTF() throws IOException {
         myObjectOutput.writeUTF("Pace");
         myObjectOutput.writeUTF("和平");
         myObjectOutput.writeUTF(" Мир");

@@ -22,10 +22,13 @@ import org.apache.dubbo.common.status.Status;
 import org.apache.dubbo.common.status.StatusChecker;
 import org.apache.dubbo.common.status.support.StatusUtils;
 import org.apache.dubbo.common.utils.CollectionUtils;
+import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.remoting.Channel;
 import org.apache.dubbo.remoting.telnet.TelnetHandler;
 import org.apache.dubbo.remoting.telnet.support.Help;
 import org.apache.dubbo.remoting.telnet.support.TelnetUtils;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.ScopeModelUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
+import static org.apache.dubbo.config.Constants.STATUS_KEY;
 
 /**
  * StatusTelnetHandler
@@ -41,13 +45,14 @@ import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATT
 @Help(parameter = "[-l]", summary = "Show status.", detail = "Show status.")
 public class StatusTelnetHandler implements TelnetHandler {
 
-    private final ExtensionLoader<StatusChecker> extensionLoader = ExtensionLoader.getExtensionLoader(StatusChecker.class);
-
     @Override
     public String telnet(Channel channel, String message) {
+        ApplicationModel applicationModel =
+                ScopeModelUtil.getApplicationModel(channel.getUrl().getScopeModel());
+        ExtensionLoader<StatusChecker> extensionLoader = applicationModel.getExtensionLoader(StatusChecker.class);
         if ("-l".equals(message)) {
-            List<StatusChecker> checkers = extensionLoader.getActivateExtension(channel.getUrl(), "status");
-            String[] header = new String[]{"resource", "status", "message"};
+            List<StatusChecker> checkers = extensionLoader.getActivateExtension(channel.getUrl(), STATUS_KEY);
+            String[] header = new String[] {"resource", "status", "message"};
             List<List<String>> table = new ArrayList<List<String>>();
             Map<String, Status> statuses = new HashMap<String, Status>();
             if (CollectionUtils.isNotEmpty(checkers)) {
@@ -81,7 +86,7 @@ public class StatusTelnetHandler implements TelnetHandler {
         }
         String status = channel.getUrl().getParameter("status");
         Map<String, Status> statuses = new HashMap<String, Status>();
-        if (CollectionUtils.isNotEmptyMap(statuses)) {
+        if (StringUtils.isNotEmpty(status)) {
             String[] ss = COMMA_SPLIT_PATTERN.split(status);
             for (String s : ss) {
                 StatusChecker handler = extensionLoader.getExtension(s);
@@ -97,5 +102,4 @@ public class StatusTelnetHandler implements TelnetHandler {
         Status stat = StatusUtils.getSummaryStatus(statuses);
         return String.valueOf(stat.getLevel());
     }
-
 }

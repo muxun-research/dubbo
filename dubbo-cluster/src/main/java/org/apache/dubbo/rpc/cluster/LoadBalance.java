@@ -35,14 +35,13 @@ import java.util.List;
 @SPI(RandomLoadBalance.NAME)
 public interface LoadBalance {
 
-	/**
-	 * 从调用者列表中选择一个
-	 * @param invokers   invokers.
-	 * @param url        refer url
-	 * @param invocation invocation.
-	 * @return selected invoker.
-	 */
-	@Adaptive("loadbalance")
-	<T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException;
-
+    /**
+     * 从调用者列表中选择一个
+     * @param invokers   invokers.
+     * @param url        refer url
+     * @param invocation invocation.
+     * @return selected invoker.
+     */
+    @Adaptive("loadbalance")
+    <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException;
 }

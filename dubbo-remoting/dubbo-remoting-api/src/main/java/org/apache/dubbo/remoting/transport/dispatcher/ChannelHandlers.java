@@ -17,7 +17,6 @@
 package org.apache.dubbo.remoting.transport.dispatcher;
 
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.remoting.ChannelHandler;
 import org.apache.dubbo.remoting.Dispatcher;
 import org.apache.dubbo.remoting.exchange.support.header.HeartbeatHandler;
@@ -43,10 +42,12 @@ public class ChannelHandlers {
     }
 
     protected ChannelHandler wrapInternal(ChannelHandler handler, URL url) {
-		// 多消息处理ChannelHandler
-		// 心跳处理ChannelHandler
-		// 线程模型，通过装饰器模式组合成Dispatcher
-        return new MultiMessageHandler(new HeartbeatHandler(ExtensionLoader.getExtensionLoader(Dispatcher.class)
-                .getAdaptiveExtension().dispatch(handler, url)));
+        // 多消息处理ChannelHandler
+        // 心跳处理ChannelHandler
+        // 线程模型，通过装饰器模式组合成Dispatcher
+        return new MultiMessageHandler(new HeartbeatHandler(url.getOrDefaultFrameworkModel()
+                .getExtensionLoader(Dispatcher.class)
+                .getAdaptiveExtension()
+                .dispatch(handler, url)));
     }
 }

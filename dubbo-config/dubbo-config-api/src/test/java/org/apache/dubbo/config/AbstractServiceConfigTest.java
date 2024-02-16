@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,76 +14,74 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.dubbo.config;
-
-
-import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.junit.jupiter.api.Test;
+
+import static org.apache.dubbo.common.constants.CommonConstants.EXPORTER_LISTENER_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.SERVICE_FILTER_KEY;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
-import static org.apache.dubbo.rpc.Constants.SERVICE_FILTER_KEY;
-import static org.apache.dubbo.rpc.Constants.EXPORTER_LISTENER_KEY;
-
-public class AbstractServiceConfigTest {
+class AbstractServiceConfigTest {
     @Test
-    public void testVersion() throws Exception {
+    void testVersion() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setVersion("version");
         assertThat(serviceConfig.getVersion(), equalTo("version"));
     }
 
     @Test
-    public void testGroup() throws Exception {
+    void testGroup() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setGroup("group");
         assertThat(serviceConfig.getGroup(), equalTo("group"));
     }
 
     @Test
-    public void testDelay() throws Exception {
+    void testDelay() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setDelay(1000);
         assertThat(serviceConfig.getDelay(), equalTo(1000));
     }
 
     @Test
-    public void testExport() throws Exception {
+    void testExport() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setExport(true);
         assertThat(serviceConfig.getExport(), is(true));
     }
 
     @Test
-    public void testWeight() throws Exception {
+    void testWeight() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setWeight(500);
         assertThat(serviceConfig.getWeight(), equalTo(500));
     }
 
     @Test
-    public void testDocument() throws Exception {
+    void testDocument() {
         ServiceConfig serviceConfig = new ServiceConfig();
-        serviceConfig.setDocument("http://dubbo.io");
-        assertThat(serviceConfig.getDocument(), equalTo("http://dubbo.io"));
+        serviceConfig.setDocument("http://dubbo.apache.org");
+        assertThat(serviceConfig.getDocument(), equalTo("http://dubbo.apache.org"));
         Map<String, String> parameters = new HashMap<String, String>();
         AbstractServiceConfig.appendParameters(parameters, serviceConfig);
-        assertThat(parameters, hasEntry("document", "http%3A%2F%2Fdubbo.io"));
+        assertThat(parameters, hasEntry("document", "http%3A%2F%2Fdubbo.apache.org"));
     }
 
     @Test
-    public void testToken() throws Exception {
+    void testToken() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setToken("token");
         assertThat(serviceConfig.getToken(), equalTo("token"));
@@ -94,21 +92,21 @@ public class AbstractServiceConfigTest {
     }
 
     @Test
-    public void testDeprecated() throws Exception {
+    void testDeprecated() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setDeprecated(true);
         assertThat(serviceConfig.isDeprecated(), is(true));
     }
 
     @Test
-    public void testDynamic() throws Exception {
+    void testDynamic() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setDynamic(true);
         assertThat(serviceConfig.isDynamic(), is(true));
     }
 
     @Test
-    public void testProtocol() throws Exception {
+    void testProtocol() {
         ServiceConfig serviceConfig = new ServiceConfig();
         assertThat(serviceConfig.getProtocol(), nullValue());
         serviceConfig.setProtocol(new ProtocolConfig());
@@ -118,7 +116,7 @@ public class AbstractServiceConfigTest {
     }
 
     @Test
-    public void testAccesslog() throws Exception {
+    void testAccesslog() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setAccesslog("access.log");
         assertThat(serviceConfig.getAccesslog(), equalTo("access.log"));
@@ -129,14 +127,14 @@ public class AbstractServiceConfigTest {
     }
 
     @Test
-    public void testExecutes() throws Exception {
+    void testExecutes() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setExecutes(10);
         assertThat(serviceConfig.getExecutes(), equalTo(10));
     }
 
     @Test
-    public void testFilter() throws Exception {
+    void testFilter() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setFilter("mockfilter");
         assertThat(serviceConfig.getFilter(), equalTo("mockfilter"));
@@ -147,7 +145,7 @@ public class AbstractServiceConfigTest {
     }
 
     @Test
-    public void testListener() throws Exception {
+    void testListener() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setListener("mockexporterlistener");
         assertThat(serviceConfig.getListener(), equalTo("mockexporterlistener"));
@@ -158,28 +156,64 @@ public class AbstractServiceConfigTest {
     }
 
     @Test
-    public void testRegister() throws Exception {
+    void testRegister() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setRegister(true);
         assertThat(serviceConfig.isRegister(), is(true));
     }
 
     @Test
-    public void testWarmup() throws Exception {
+    void testWarmup() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setWarmup(100);
         assertThat(serviceConfig.getWarmup(), equalTo(100));
     }
 
     @Test
-    public void testSerialization() throws Exception {
+    void testSerialization() {
         ServiceConfig serviceConfig = new ServiceConfig();
         serviceConfig.setSerialization("serialization");
         assertThat(serviceConfig.getSerialization(), equalTo("serialization"));
     }
 
-
-    private static class ServiceConfig extends AbstractServiceConfig {
-
+    @Test
+    void testPreferSerialization() {
+        ServiceConfig serviceConfig = new ServiceConfig();
+        serviceConfig.setPreferSerialization("preferSerialization");
+        assertThat(serviceConfig.getPreferSerialization(), equalTo("preferSerialization"));
     }
+
+    @Test
+    void testPreferSerializationDefault1() {
+        ServiceConfig serviceConfig = new ServiceConfig();
+        assertNull(serviceConfig.getPreferSerialization());
+
+        serviceConfig.checkDefault();
+        assertNull(serviceConfig.getPreferSerialization());
+
+        serviceConfig = new ServiceConfig();
+        serviceConfig.setSerialization("x-serialization");
+        assertNull(serviceConfig.getPreferSerialization());
+
+        serviceConfig.checkDefault();
+        assertThat(serviceConfig.getPreferSerialization(), equalTo("x-serialization"));
+    }
+
+    @Test
+    void testPreferSerializationDefault2() {
+        ServiceConfig serviceConfig = new ServiceConfig();
+        assertNull(serviceConfig.getPreferSerialization());
+
+        serviceConfig.refresh();
+        assertNull(serviceConfig.getPreferSerialization());
+
+        serviceConfig = new ServiceConfig();
+        serviceConfig.setSerialization("x-serialization");
+        assertNull(serviceConfig.getPreferSerialization());
+
+        serviceConfig.refresh();
+        assertThat(serviceConfig.getPreferSerialization(), equalTo("x-serialization"));
+    }
+
+    private static class ServiceConfig extends AbstractServiceConfig {}
 }
