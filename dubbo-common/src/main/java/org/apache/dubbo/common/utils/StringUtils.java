@@ -852,6 +852,23 @@ public final class StringUtils {
         return sb.toString();
     }
 
+    public static String join(final Object[] array, final char delimiter, final int startIndex, final int endIndex) {
+        if (ArrayUtils.isEmpty(array)) {
+            return EMPTY_STRING;
+        }
+        if (endIndex - startIndex <= 0) {
+            return EMPTY_STRING;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = startIndex; i < endIndex; i++) {
+            if (i > 0) {
+                sb.append(delimiter);
+            }
+            sb.append(array[i]);
+        }
+        return sb.toString();
+    }
+
     /**
      * parse key-value pair.
      *
@@ -861,7 +878,7 @@ public final class StringUtils {
      */
     private static Map<String, String> parseKeyValuePair(String str, String itemSeparator) {
         String[] tmp = str.split(itemSeparator);
-        Map<String, String> map = new HashMap<String, String>(tmp.length);
+        Map<String, String> map = new HashMap<>(tmp.length);
         for (int i = 0; i < tmp.length; i++) {
             Matcher matcher = KVP_PATTERN.matcher(tmp[i]);
             if (!matcher.matches()) {
@@ -885,7 +902,7 @@ public final class StringUtils {
      */
     public static Map<String, String> parseQueryString(String qs) {
         if (isEmpty(qs)) {
-            return new HashMap<String, String>();
+            return new HashMap<>();
         }
         return parseKeyValuePair(qs, "\\&");
     }
@@ -1239,10 +1256,6 @@ public final class StringUtils {
 
     /**
      * Test str whether starts with the prefix ignore case.
-     *
-     * @param str
-     * @param prefix
-     * @return
      */
     public static boolean startsWithIgnoreCase(String str, String prefix) {
         if (str == null || prefix == null || str.length() < prefix.length()) {
@@ -1250,5 +1263,188 @@ public final class StringUtils {
         }
         // return str.substring(0, prefix.length()).equalsIgnoreCase(prefix);
         return str.regionMatches(true, 0, prefix, 0, prefix.length());
+    }
+
+    /**
+     * Returns the default string if the input string is empty, otherwise returns
+     * the input string itself
+     */
+    public static String defaultIf(String str, String defaultStr) {
+        return isEmpty(str) ? defaultStr : str;
+    }
+
+    /**
+     * Gets a substring from the specified String avoiding exceptions. If end index
+     * is not found, returns substring from start to the end
+     */
+    public static String substring(String str, int start, int end) {
+        if (str == null) {
+            return null;
+        }
+        return end == INDEX_NOT_FOUND ? str.substring(start) : str.substring(start, end);
+    }
+
+    /**
+     * Gets the substring before the first occurrence of a separator.
+     * <p>If nothing is found, returns the original string</p>
+     */
+    public static String substringBefore(String str, int separator) {
+        if (isEmpty(str)) {
+            return str;
+        }
+        int index = str.indexOf(separator);
+        return index == INDEX_NOT_FOUND ? str : str.substring(0, index);
+    }
+
+    /**
+     * Gets the substring after the first occurrence of a separator.
+     * <p>If nothing is found, the empty string is returned.</p>
+     */
+    public static String substringAfter(String str, int separator) {
+        if (isEmpty(str)) {
+            return str;
+        }
+        int index = str.indexOf(separator);
+        return index == INDEX_NOT_FOUND ? str : str.substring(index + 1);
+    }
+
+    /**
+     * Gets the substring before the last occurrence of a separator.
+     * <p>If nothing is found, returns the original string</p>
+     */
+    public static String substringBeforeLast(String str, int separator) {
+        if (isEmpty(str)) {
+            return str;
+        }
+        int index = str.lastIndexOf(separator);
+        return index == INDEX_NOT_FOUND ? str : str.substring(0, index);
+    }
+
+    /**
+     * Gets the substring after the last occurrence of a separator.
+     * <p>If nothing is found, the empty string is returned.</p>
+     */
+    public static String substringAfterLast(String str, int separator) {
+        if (isEmpty(str)) {
+            return str;
+        }
+        int index = str.lastIndexOf(separator);
+        return index == INDEX_NOT_FOUND || index == str.length() - 1 ? EMPTY_STRING : str.substring(index + 1);
+    }
+
+    /**
+     * Tokenize the given String into a String array.
+     * Trims tokens and omits empty tokens.
+     */
+    public static String[] tokenize(String str, char... separators) {
+        if (isEmpty(str)) {
+            return EMPTY_STRING_ARRAY;
+        }
+        return tokenizeToList(str, separators).toArray(EMPTY_STRING_ARRAY);
+    }
+
+    /**
+     * Splits a string into a list of tokens using specified separators, trimming whitespace
+     * and ignoring empty tokens. Uses comma as default separator if none provided.
+     */
+    public static List<String> tokenizeToList(String str, char... separators) {
+        if (isEmpty(str)) {
+            return Collections.emptyList();
+        }
+        if (separators == null || separators.length == 0) {
+            separators = new char[] {','};
+        }
+        List<String> tokens = new ArrayList<>();
+        int start = -1, end = 0;
+        int i = 0;
+        out:
+        for (int len = str.length(), sLen = separators.length; i < len; i++) {
+            char c = str.charAt(i);
+            for (int j = 0; j < sLen; j++) {
+                if (c == separators[j]) {
+                    if (start > -1) {
+                        tokens.add(str.substring(start, end + 1));
+                        start = -1;
+                    }
+                    continue out;
+                }
+            }
+            switch (c) {
+                case ' ':
+                case '\t':
+                case '\n':
+                case '\r':
+                    break;
+                default:
+                    if (start == -1) {
+                        start = i;
+                    }
+                    end = i;
+                    break;
+            }
+        }
+        if (start > -1) {
+            String part = str.substring(start, end + 1);
+            if (tokens.isEmpty()) {
+                return Collections.singletonList(part);
+            }
+            tokens.add(part);
+        }
+        return tokens;
+    }
+
+    /**
+     * Converts string to Boolean based on common boolean representations.
+     * Supports values like 'true'/'false', 'yes'/'no', 'on'/'off', '1'/'0', etc.
+     * Returns null if the input cannot be parsed.
+     */
+    public static Boolean toBoolean(String value) {
+        if (isEmpty(value)) {
+            return null;
+        }
+        switch (value.length()) {
+            case 1:
+                char c = value.charAt(0);
+                if (c == '0' || c == 'n' || c == 'N') {
+                    return Boolean.FALSE;
+                }
+                if (c == '1' || c == 'y' || c == 'Y') {
+                    return Boolean.TRUE;
+                }
+                break;
+            case 2:
+                if ("on".equalsIgnoreCase(value)) {
+                    return Boolean.TRUE;
+                }
+                if ("no".equalsIgnoreCase(value)) {
+                    return Boolean.FALSE;
+                }
+                break;
+            case 3:
+                if ("yes".equalsIgnoreCase(value)) {
+                    return Boolean.TRUE;
+                }
+                if ("off".equalsIgnoreCase(value)) {
+                    return Boolean.TRUE;
+                }
+                break;
+            case 4:
+                if ("true".equalsIgnoreCase(value)) {
+                    return Boolean.TRUE;
+                }
+                break;
+            case 5:
+                if ("false".equalsIgnoreCase(value)) {
+                    return Boolean.FALSE;
+                }
+                break;
+            default:
+        }
+        return null;
+    }
+
+    public static boolean toBoolean(String value, boolean defaultValue) {
+        Boolean result = toBoolean(value);
+        return result == null ? defaultValue : result;
     }
 }

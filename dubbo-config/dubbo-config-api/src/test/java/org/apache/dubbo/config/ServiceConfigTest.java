@@ -17,6 +17,7 @@
 package org.apache.dubbo.config;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.config.api.DemoService;
 import org.apache.dubbo.config.api.Greeting;
@@ -86,6 +87,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.withSettings;
 
 class ServiceConfigTest {
+
     private Protocol protocolDelegate = Mockito.mock(Protocol.class);
     private Registry registryDelegate = Mockito.mock(Registry.class);
     private Exporter exporter = Mockito.mock(Exporter.class);
@@ -184,8 +186,9 @@ class ServiceConfigTest {
         assertThat(url.getParameters(), hasKey(METHODS_KEY));
         assertThat(url.getParameters().get(METHODS_KEY), containsString("echo"));
         assertThat(url.getParameters(), hasEntry(SIDE_KEY, PROVIDER));
-        // export MetadataService and DemoService in "mockprotocol2" protocol.
-        Mockito.verify(protocolDelegate, times(2)).export(Mockito.any(Invoker.class));
+        // export DemoService in "mockprotocol2" protocol.
+        Mockito.verify(protocolDelegate, times(1)).export(Mockito.any(Invoker.class));
+        // MetadataService will be exported on either dubbo or triple (the only two default acceptable protocol)
     }
 
     @Test
@@ -260,7 +263,9 @@ class ServiceConfigTest {
     @Test
     void testInterface1() throws Exception {
         Assertions.assertThrows(IllegalStateException.class, () -> {
+            ProtocolConfig protocolConfig = new ProtocolConfig(CommonConstants.TRIPLE);
             ServiceConfig<DemoService> service = new ServiceConfig<>();
+            service.setProtocol(protocolConfig);
             service.setInterface(DemoServiceImpl.class);
         });
     }
@@ -270,6 +275,16 @@ class ServiceConfigTest {
         ServiceConfig<DemoService> service = new ServiceConfig<>();
         service.setInterface(DemoService.class);
         assertThat(service.getInterface(), equalTo(DemoService.class.getName()));
+    }
+
+    @Test
+    void testNoInterfaceSupport() throws Exception {
+        ProtocolConfig protocolConfig = new ProtocolConfig(CommonConstants.TRIPLE);
+        protocolConfig.setNoInterfaceSupport(true);
+        ServiceConfig<DemoService> service = new ServiceConfig<>();
+        service.setProtocol(protocolConfig);
+        service.setInterface(DemoServiceImpl.class);
+        assertThat(service.getInterface(), equalTo(DemoServiceImpl.class.getName()));
     }
 
     @Test
@@ -345,8 +360,9 @@ class ServiceConfigTest {
         assertThat(url.getParameters(), hasKey(METHODS_KEY));
         assertThat(url.getParameters().get(METHODS_KEY), containsString("echo"));
         assertThat(url.getParameters(), hasEntry(SIDE_KEY, PROVIDER));
-        // export MetadataService and DemoService in "mockprotocol2" protocol.
-        Mockito.verify(protocolDelegate, times(2)).export(Mockito.any(Invoker.class));
+        // export DemoService in "mockprotocol2" protocol (MetadataService will be not exported if no registry
+        // specified)
+        Mockito.verify(protocolDelegate, times(1)).export(Mockito.any(Invoker.class));
     }
 
     @Test

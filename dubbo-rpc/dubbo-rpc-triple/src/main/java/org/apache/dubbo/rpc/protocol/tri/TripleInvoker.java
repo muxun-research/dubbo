@@ -24,6 +24,7 @@ import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.stream.StreamObserver;
 import org.apache.dubbo.common.threadpool.ThreadlessExecutor;
+import org.apache.dubbo.common.utils.SystemPropertyConfigUtils;
 import org.apache.dubbo.remoting.api.connection.AbstractConnectionClient;
 import org.apache.dubbo.rpc.AppResponse;
 import org.apache.dubbo.rpc.AsyncRpcResult;
@@ -75,6 +76,7 @@ import static org.apache.dubbo.common.constants.CommonConstants.INTERFACE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMEOUT_KEY;
 import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROTOCOL_FAILED_DESTROY_INVOKER;
 import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROTOCOL_FAILED_REQUEST;
+import static org.apache.dubbo.remoting.http12.message.MediaType.APPLICATION_GRPC_PROTO;
 import static org.apache.dubbo.rpc.Constants.COMPRESSOR_KEY;
 import static org.apache.dubbo.rpc.Constants.TOKEN_KEY;
 import static org.apache.dubbo.rpc.model.MethodDescriptor.RpcType.UNARY;
@@ -93,10 +95,11 @@ public class TripleInvoker<T> extends AbstractInvoker<T> {
     private final String acceptEncodings;
     private final TripleWriteQueue writeQueue = new TripleWriteQueue(256);
 
-    private static final boolean setFutureWhenSync =
-            Boolean.parseBoolean(System.getProperty(CommonConstants.SET_FUTURE_IN_SYNC_MODE, "true"));
+    private static final boolean setFutureWhenSync = Boolean.parseBoolean(SystemPropertyConfigUtils.getSystemProperty(
+            CommonConstants.ThirdPartyProperty.SET_FUTURE_IN_SYNC_MODE, "false"));
     private final PackableMethodFactory packableMethodFactory;
     private final Map<MethodDescriptor, PackableMethod> packableMethodCache = new ConcurrentHashMap<>();
+    private static Compressor compressor;
 
     public TripleInvoker(
             Class<T> serviceType,
@@ -118,14 +121,19 @@ public class TripleInvoker<T> extends AbstractInvoker<T> {
 
     private static AsciiString getSchemeFromUrl(URL url) {
         boolean ssl = url.getParameter(CommonConstants.SSL_ENABLED_KEY, false);
-        return ssl ? TripleConstant.HTTPS_SCHEME : TripleConstant.HTTP_SCHEME;
+        return ssl ? TripleConstants.HTTPS_SCHEME : TripleConstants.HTTP_SCHEME;
     }
 
     private static Compressor getCompressorFromEnv() {
-        Configuration configuration = ConfigurationUtils.getEnvConfiguration(ApplicationModel.defaultModel());
-        String compressorKey = configuration.getString(COMPRESSOR_KEY, Identity.MESSAGE_ENCODING);
-        return Compressor.getCompressor(
-                ScopeModelUtil.getFrameworkModel(ApplicationModel.defaultModel()), compressorKey);
+        Compressor compressor = TripleInvoker.compressor;
+        if (compressor == null) {
+            ApplicationModel model = ApplicationModel.defaultModel();
+            Configuration configuration = ConfigurationUtils.getEnvConfiguration(model);
+            String compressorKey = configuration.getString(COMPRESSOR_KEY, Identity.MESSAGE_ENCODING);
+            compressor = Compressor.getCompressor(ScopeModelUtil.getFrameworkModel(model), compressorKey);
+            TripleInvoker.compressor = compressor;
+        }
+        return compressor;
     }
 
     @Override
@@ -155,6 +163,7 @@ public class TripleInvoker<T> extends AbstractInvoker<T> {
                 isSync(methodDescriptor, invocation) ? new ThreadlessExecutor() : streamExecutor;
         ClientCall call = new TripleClientCall(
                 connectionClient, callbackExecutor, getUrl().getOrDefaultFrameworkModel(), writeQueue);
+        RpcContext.getServiceContext().setLocalAddress(connectionClient.getLocalAddress());
         AsyncRpcResult result;
         try {
             switch (methodDescriptor.getRpcType()) {
@@ -198,10 +207,20 @@ public class TripleInvoker<T> extends AbstractInvoker<T> {
 
     AsyncRpcResult invokeServerStream(MethodDescriptor methodDescriptor, Invocation invocation, ClientCall call) {
         RequestMetadata request = createRequest(methodDescriptor, invocation, null);
-        StreamObserver<Object> responseObserver =
-                (StreamObserver<Object>) invocation.getArguments()[1];
-        final StreamObserver<Object> requestObserver = streamCall(call, request, responseObserver);
-        requestObserver.onNext(invocation.getArguments()[0]);
+        Object[] arguments = invocation.getArguments();
+        final StreamObserver<Object> requestObserver;
+        if (arguments.length == 2) {
+            StreamObserver<Object> responseObserver = (StreamObserver<Object>) arguments[1];
+            requestObserver = streamCall(call, request, responseObserver);
+            requestObserver.onNext(invocation.getArguments()[0]);
+        } else if (arguments.length == 1) {
+            StreamObserver<Object> responseObserver = (StreamObserver<Object>) arguments[0];
+            requestObserver = streamCall(call, request, responseObserver);
+            requestObserver.onNext(null);
+        } else {
+            throw new IllegalStateException(
+                    "The first parameter must be a StreamObserver when there are no parameters, or the second parameter must be a StreamObserver when there are parameters");
+        }
         requestObserver.onCompleted();
         return new AsyncRpcResult(CompletableFuture.completedFuture(new AppResponse()), invocation);
     }
@@ -288,7 +307,7 @@ public class TripleInvoker<T> extends AbstractInvoker<T> {
             meta.packableMethod = (PackableMethod) methodDescriptor;
         } else {
             meta.packableMethod = packableMethodCache.computeIfAbsent(
-                    methodDescriptor, (md) -> packableMethodFactory.create(md, url, TripleConstant.CONTENT_PROTO));
+                    methodDescriptor, (md) -> packableMethodFactory.create(md, url, APPLICATION_GRPC_PROTO.getName()));
         }
         meta.convertNoLowerHeader = TripleProtocol.CONVERT_NO_LOWER_HEADER;
         meta.ignoreDefaultVersion = TripleProtocol.IGNORE_1_0_0_VERSION;

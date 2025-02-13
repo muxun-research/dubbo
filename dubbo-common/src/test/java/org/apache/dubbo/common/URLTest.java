@@ -18,6 +18,7 @@ package org.apache.dubbo.common;
 
 import org.apache.dubbo.common.url.component.ServiceConfigURL;
 import org.apache.dubbo.common.utils.CollectionUtils;
+import org.apache.dubbo.common.utils.SystemPropertyConfigUtils;
 
 import java.io.File;
 import java.util.Arrays;
@@ -28,8 +29,8 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import static org.apache.dubbo.common.constants.CommonConstants.OS_NAME_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.OS_WIN_PREFIX;
+import static org.apache.dubbo.common.constants.CommonConstants.SystemProperty.SYSTEM_OS_NAME;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -720,7 +721,7 @@ class URLTest {
 
     @Test
     void test_windowAbsolutePathBeginWithSlashIsValid() throws Exception {
-        final String osProperty = System.getProperties().getProperty(OS_NAME_KEY);
+        final String osProperty = SystemPropertyConfigUtils.getSystemProperty(SYSTEM_OS_NAME);
         if (!osProperty.toLowerCase().contains(OS_WIN_PREFIX)) return;
 
         System.out.println("Test Windows valid path string.");
@@ -1131,5 +1132,23 @@ class URLTest {
         assertEquals("[2408:4004:194:8896:3e8a:82ae:814a:398]", url.getHost());
         assertEquals(20881, url.getPort());
         assertEquals("apache", url.getParameter("name"));
+    }
+
+    @Test
+    void testToServiceString() {
+        URL url = URL.valueOf(
+                "zookeeper://10.20.130.230:4444/org.apache.dubbo.metadata.report.MetadataReport?version=1.0.0&application=vic&group=aaa");
+        assertEquals(
+                "zookeeper://10.20.130.230:4444/aaa/org.apache.dubbo.metadata.report.MetadataReport:1.0.0",
+                url.toServiceString());
+    }
+
+    @Test
+    void testToServiceStringWithParameters() {
+        URL url = URL.valueOf(
+                "zookeeper://10.20.130.230:4444/org.apache.dubbo.metadata.report.MetadataReport?version=1.0.0&application=vic&group=aaa&namespace=test");
+        assertEquals(
+                "zookeeper://10.20.130.230:4444/aaa/org.apache.dubbo.metadata.report.MetadataReport:1.0.0?namespace=test",
+                url.toServiceString("namespace"));
     }
 }

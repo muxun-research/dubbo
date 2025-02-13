@@ -20,7 +20,12 @@ import org.apache.dubbo.config.support.Nested;
 
 import java.io.Serializable;
 
+/**
+ * Configuration for the prometheus.
+ */
 public class PrometheusConfig implements Serializable {
+
+    private static final long serialVersionUID = 2238807632335823129L;
 
     /**
      * Prometheus exporter configuration
@@ -29,7 +34,7 @@ public class PrometheusConfig implements Serializable {
     private Exporter exporter;
 
     /**
-     * Prometheus Pushgateway configuration
+     * Prometheus push gateway configuration
      */
     @Nested
     private Pushgateway pushgateway;

@@ -18,12 +18,15 @@ package org.apache.dubbo.config;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
+import org.apache.dubbo.common.aot.NativeDetector;
+import org.apache.dubbo.common.compiler.support.AdaptiveCompiler;
 import org.apache.dubbo.common.config.ConfigurationUtils;
 import org.apache.dubbo.common.config.Environment;
 import org.apache.dubbo.common.config.InmemoryConfiguration;
 import org.apache.dubbo.common.utils.ClassUtils;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.ConfigUtils;
+import org.apache.dubbo.common.utils.JsonUtils;
 import org.apache.dubbo.common.utils.ReflectUtils;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.config.support.Parameter;
@@ -46,16 +49,16 @@ import java.util.stream.Collectors;
 import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
 import static org.apache.dubbo.common.constants.CommonConstants.DUBBO_VERSION_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.INVOKER_LISTENER_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.NATIVE;
 import static org.apache.dubbo.common.constants.CommonConstants.PID_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.REFERENCE_FILTER_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.RELEASE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.TAG_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.TIMESTAMP_KEY;
 import static org.apache.dubbo.common.constants.LoggerCodeConstants.CONFIG_NO_METHOD_FOUND;
+import static org.apache.dubbo.config.Constants.DEFAULT_NATIVE_PROXY;
 
 /**
- * AbstractDefaultConfig
+ * Abstract configuration for the interface.
  *
  * @export
  */
@@ -64,134 +67,163 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     private static final long serialVersionUID = -1559314110797223229L;
 
     /**
-     * The interface name of the exported service
+     * Interface name of the exported service.
      */
     protected String interfaceName;
 
     /**
-     * The classLoader of interface belong to
+     * ClassLoader associated with the interface.
      */
     protected transient ClassLoader interfaceClassLoader;
 
     /**
-     * The remote service version the customer/provider side will reference
+     * Version of the remote service referenced by the consumer/provider.
      */
     protected String version;
 
     /**
-     * The remote service group the customer/provider side will reference
+     * Group of the remote service referenced by the consumer/provider.
      */
     protected String group;
 
-    protected ServiceMetadata serviceMetadata;
     /**
-     * Local impl class name for the service interface
+     * Service metadata configuration.
+     */
+    protected ServiceMetadata serviceMetadata;
+
+    /**
+     * Local implementation class name for the service interface.
      */
     protected String local;
 
     /**
-     * Local stub class name for the service interface
+     * Local stub class name for the service interface.
      */
     protected String stub;
 
     /**
-     * Service monitor
+     * Service monitoring configuration.
      */
     protected MonitorConfig monitor;
 
     /**
-     * Strategies for generating dynamic agents，there are two strategies can be chosen: jdk and javassist
+     * Strategy for generating dynamic agents (options: "jdk" or "javassist").
      */
     protected String proxy;
 
     /**
-     * Cluster type
+     * Cluster type for service.
      */
     protected String cluster;
 
     /**
-     * The {@code Filter} when the provider side exposed a service or the customer side references a remote service used,
-     * if there are more than one, you can use commas to separate them
+     * Filters for service exposure or reference (multiple filters can be separated by commas).
      */
     protected String filter;
 
     /**
-     * The Listener when the provider side exposes a service or the customer side references a remote service used
-     * if there are more than one, you can use commas to separate them
+     * Listeners for service exposure or reference (multiple listeners can be separated by commas).
      */
     protected String listener;
 
     /**
-     * The owner of the service providers
+     * Owner of the service providers.
      */
     protected String owner;
 
     /**
-     * Connection limits, 0 means shared connection, otherwise it defines the connections delegated to the current service
+     * Connection limits: 0 for shared connection, otherwise specifying connections for the service.
      */
     protected Integer connections;
 
     /**
-     * The layer of service providers
+     * Layer of service providers.
      */
     protected String layer;
 
     /**
-     * The application info
+     * Application configuration for the service.
      */
     protected ApplicationConfig application;
 
     /**
-     * The module info
+     * Module configuration for the service.
      */
     protected ModuleConfig module;
 
     /**
-     * The registry list the service will register to
-     * Also see {@link #registryIds}, only one of them will work.
+     * Registries where the service will be registered (use this or registryIds, not both).
      */
     protected List<RegistryConfig> registries;
 
     /**
-     * The method configuration
+     * Method-specific configuration.
      */
     private List<MethodConfig> methods;
 
     /**
-     * The id list of registries the service will register to
-     * Also see {@link #registries}, only one of them will work.
+     * Registry IDs for service registration (use this or registries, not both).
      */
     protected String registryIds;
 
-    // connection events
+    /**
+     * Event handler for connection establishment.
+     */
     protected String onconnect;
 
     /**
-     * Disconnection events
+     * Event handler for disconnection.
      */
     protected String ondisconnect;
 
     /**
-     * The metadata report configuration
+     * Metadata report configuration.
      */
     protected MetadataReportConfig metadataReportConfig;
 
+    /**
+     * Configuration center settings.
+     */
     protected ConfigCenterConfig configCenter;
 
-    // callback limits
+    /**
+     * Callback limits for the service.
+     */
     private Integer callbacks;
-    // the scope for referring/exporting a service, if it's local, it means searching in current JVM only.
+
+    /**
+     * Service scope ("local" implies searching in the current JVM only).
+     */
     private String scope;
 
+    /**
+     * Custom tag for the service configuration.
+     */
     protected String tag;
 
+    /**
+     * Enable service authentication.
+     */
     private Boolean auth;
 
-    /*Indicates to create separate instances or not for services/references that have the same serviceKey.
-     * By default, all services/references that have the same serviceKey will share the same instance and process.
-     *
-     * This key currently can only work when using ReferenceConfig and SimpleReferenceCache together.
-     * Call ReferenceConfig.get() directly will not check this attribute.
+    /**
+     * Authenticator for authentication
+     */
+    private String authenticator;
+
+    /**
+     * Username for basic authenticator
+     */
+    private String username;
+
+    /**
+     * Password for basic authenticator
+     */
+    private String password;
+
+    /**
+     * Use separate instances for services with the same serviceKey (applies when using ReferenceConfig and SimpleReferenceCache together).
+     * Directly calling ReferenceConfig.get() will not check this attribute.
      */
     private Boolean singleton;
 
@@ -204,7 +236,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     /**
      * The url of the reference service
      */
-    protected final transient List<URL> urls = new ArrayList<URL>();
+    protected final transient List<URL> urls = new ArrayList<>();
 
     @Transient
     public List<URL> getExportedUrls() {
@@ -272,8 +304,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      * @return
      */
     protected String[] methods(Class<?> interfaceClass) {
-        boolean isNative = getEnvironment().getConfiguration().getBoolean(NATIVE, false);
-        if (isNative) {
+        if (NativeDetector.inNativeImage()) {
             return Arrays.stream(interfaceClass.getMethods())
                     .map(Method::getName)
                     .toArray(String[]::new);
@@ -297,9 +328,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                 return;
             }
 
-            if (!interfaceClass.isInterface() && !canSkipInterfaceCheck()) {
-                throw new IllegalStateException(interfaceName + " is not an interface");
-            }
+            checkInterface();
 
             // Auto create MethodConfig/ArgumentConfig according to config props
             Map<String, String> configProperties = subPropsConfiguration.getProperties();
@@ -361,13 +390,9 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     /**
      * it is used for skipping the check of interface since dubbo 3.2
-     * rest protocol allow the service is implement class
-     *
-     * @return
+     * rest and triple protocol allow the service is implement class
      */
-    protected boolean canSkipInterfaceCheck() {
-        return false;
-    }
+    protected void checkInterface() {}
 
     protected boolean verifyMethodConfig(
             MethodConfig methodConfig, Class<?> interfaceClass, boolean ignoreInvalidMethodConfig) {
@@ -597,11 +622,20 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     }
 
     public String getProxy() {
-        return proxy;
+        if (NativeDetector.inNativeImage()) {
+            return DEFAULT_NATIVE_PROXY;
+        } else {
+            return this.proxy;
+        }
     }
 
     public void setProxy(String proxy) {
-        this.proxy = proxy;
+        if (NativeDetector.inNativeImage()) {
+            this.proxy = DEFAULT_NATIVE_PROXY;
+            AdaptiveCompiler.setDefaultCompiler(DEFAULT_NATIVE_PROXY);
+        } else {
+            this.proxy = proxy;
+        }
     }
 
     public Integer getConnections() {
@@ -713,6 +747,20 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     public void setMethods(List<? extends MethodConfig> methods) {
         this.methods = (methods != null) ? new ArrayList<>(methods) : null;
+    }
+
+    /**
+     * It is only used in native scenarios to get methodConfigs.
+     * @param methodsJson
+     */
+    public void setMethodsJson(List<String> methodsJson) {
+        if (methodsJson != null) {
+            this.methods = new ArrayList<>();
+            methodsJson.forEach(
+                    (methodConfigJson) -> methods.add(JsonUtils.toJavaObject(methodConfigJson, MethodConfig.class)));
+        } else {
+            this.methods = null;
+        }
     }
 
     public void addMethod(MethodConfig methodConfig) {
@@ -857,6 +905,33 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
     public void setAuth(Boolean auth) {
         this.auth = auth;
+    }
+
+    public String getAuthenticator() {
+        return authenticator;
+    }
+
+    public AbstractInterfaceConfig setAuthenticator(String authenticator) {
+        this.authenticator = authenticator;
+        return this;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public AbstractInterfaceConfig setUsername(String username) {
+        this.username = username;
+        return this;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public AbstractInterfaceConfig setPassword(String password) {
+        this.password = password;
+        return this;
     }
 
     public SslConfig getSslConfig() {

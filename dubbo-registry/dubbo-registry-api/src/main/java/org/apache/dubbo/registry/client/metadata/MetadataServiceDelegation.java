@@ -26,7 +26,12 @@ import org.apache.dubbo.metadata.MetadataInfo;
 import org.apache.dubbo.metadata.MetadataService;
 import org.apache.dubbo.registry.client.ServiceDiscovery;
 import org.apache.dubbo.registry.support.RegistryManager;
+import org.apache.dubbo.remoting.http12.HttpStatus;
+import org.apache.dubbo.remoting.http12.exception.HttpStatusException;
+import org.apache.dubbo.remoting.http12.rest.OpenAPIRequest;
+import org.apache.dubbo.remoting.http12.rest.OpenAPIService;
 import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.protocol.tri.TripleProtocol;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,11 +60,13 @@ public class MetadataServiceDelegation implements MetadataService, Disposable {
 
     private final ApplicationModel applicationModel;
     private final RegistryManager registryManager;
-    private ConcurrentMap<String, InstanceMetadataChangedListener> instanceMetadataChangedListenerMap =
+    private final ConcurrentMap<String, InstanceMetadataChangedListener> instanceMetadataChangedListenerMap =
             new ConcurrentHashMap<>();
     private URL url;
     // works only for DNS service discovery
     private String instanceMetadata;
+
+    public static final String VERSION = "1.0.0";
 
     public MetadataServiceDelegation(ApplicationModel applicationModel) {
         this.applicationModel = applicationModel;
@@ -96,21 +103,25 @@ public class MetadataServiceDelegation implements MetadataService, Disposable {
         for (ServiceDiscovery sd : serviceDiscoveries) {
             MetadataInfo metadataInfo = sd.getLocalMetadata();
             Map<String, SortedSet<URL>> serviceURLs = metadataInfo.getExportedServiceURLs();
-            if (serviceURLs == null) {
-                continue;
-            }
-            for (Map.Entry<String, SortedSet<URL>> entry : serviceURLs.entrySet()) {
-                SortedSet<URL> urls = entry.getValue();
-                if (urls != null) {
-                    for (URL url : urls) {
-                        if (!MetadataService.class.getName().equals(url.getServiceInterface())) {
-                            bizURLs.add(url);
-                        }
+            joinNonMetadataServiceUrls(bizURLs, serviceURLs);
+        }
+        return MetadataService.toSortedStrings(bizURLs);
+    }
+
+    private void joinNonMetadataServiceUrls(SortedSet<URL> bizURLs, Map<String, SortedSet<URL>> serviceURLs) {
+        if (serviceURLs == null) {
+            return;
+        }
+        for (Map.Entry<String, SortedSet<URL>> entry : serviceURLs.entrySet()) {
+            SortedSet<URL> urls = entry.getValue();
+            if (urls != null) {
+                for (URL url : urls) {
+                    if (!MetadataService.class.getName().equals(url.getServiceInterface())) {
+                        bizURLs.add(url);
                     }
                 }
             }
         }
-        return MetadataService.toSortedStrings(bizURLs);
     }
 
     private SortedSet<String> getAllUnmodifiableSubscribedURLs() {
@@ -119,19 +130,7 @@ public class MetadataServiceDelegation implements MetadataService, Disposable {
         for (ServiceDiscovery sd : serviceDiscoveries) {
             MetadataInfo metadataInfo = sd.getLocalMetadata();
             Map<String, SortedSet<URL>> serviceURLs = metadataInfo.getSubscribedServiceURLs();
-            if (serviceURLs == null) {
-                continue;
-            }
-            for (Map.Entry<String, SortedSet<URL>> entry : serviceURLs.entrySet()) {
-                SortedSet<URL> urls = entry.getValue();
-                if (urls != null) {
-                    for (URL url : urls) {
-                        if (!MetadataService.class.getName().equals(url.getServiceInterface())) {
-                            bizURLs.add(url);
-                        }
-                    }
-                }
-            }
+            joinNonMetadataServiceUrls(bizURLs, serviceURLs);
         }
         return MetadataService.toSortedStrings(bizURLs);
     }
@@ -218,6 +217,18 @@ public class MetadataServiceDelegation implements MetadataService, Disposable {
     public String getAndListenInstanceMetadata(String consumerId, InstanceMetadataChangedListener listener) {
         instanceMetadataChangedListenerMap.put(consumerId, listener);
         return instanceMetadata;
+    }
+
+    @Override
+    public String getOpenAPI(OpenAPIRequest request) {
+        if (TripleProtocol.OPENAPI_ENABLED) {
+            OpenAPIService openAPIService = applicationModel.getBean(OpenAPIService.class);
+            if (openAPIService != null) {
+                return openAPIService.getDocument(request);
+            }
+        }
+
+        throw new HttpStatusException(HttpStatus.NOT_FOUND.getCode(), "OpenAPI is not available");
     }
 
     private SortedSet<String> getServiceURLs(

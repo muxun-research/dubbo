@@ -17,6 +17,7 @@
 package org.apache.dubbo.config;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.constants.RegisterTypeEnum;
 import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.StringUtils;
@@ -43,41 +44,43 @@ import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATT
 import static org.apache.dubbo.common.constants.CommonConstants.DUBBO;
 
 /**
- * ServiceConfig
+ * Base configuration for service.
  *
  * @export
  */
+@SuppressWarnings({"rawtypes", "deprecation"})
 public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
 
     private static final long serialVersionUID = 3033787999037024738L;
 
     /**
-     * The interface class of the exported service
+     * The interface class of the exported service.
      */
     protected Class<?> interfaceClass;
 
     /**
-     * The reference of the interface implementation
+     * The reference to the interface implementation.
      */
     protected transient T ref;
 
     /**
-     * The service name
+     * The service name, which is used to uniquely identify the service.
      */
     protected String path;
 
     /**
-     * The provider configuration
+     * The provider configuration for this service.
      */
     protected ProviderConfig provider;
 
     /**
-     * The providerIds
+     * A comma-separated list of provider IDs.
      */
     protected String providerIds;
 
     /**
-     * whether it is a GenericService
+     * Indicates whether the service is a GenericService.
+     * If set, this means that the service is a generic service that can handle multiple types.
      */
     protected volatile String generic;
 
@@ -108,6 +111,12 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     }
 
     @Override
+    public void setProtocols(List<? extends ProtocolConfig> protocols) {
+        super.setProtocols(protocols);
+        checkInterface();
+    }
+
+    @Override
     protected void postProcessAfterScopeModelChanged(ScopeModel oldScopeModel, ScopeModel newScopeModel) {
         super.postProcessAfterScopeModelChanged(oldScopeModel, newScopeModel);
         if (this.provider != null && this.provider.getScopeModel() != getScopeModel()) {
@@ -118,7 +127,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     public boolean shouldExport() {
         Boolean export = getExport();
         // default value is true
-        return export == null ? true : export;
+        return export == null || export;
     }
 
     @Override
@@ -213,7 +222,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     }
 
     protected void completeCompoundConfigs() {
-        super.completeCompoundConfigs(provider);
+        completeCompoundConfigs(provider);
         if (provider != null) {
             if (notHasSelfProtocolProperty()) {
                 setProtocols(provider.getProtocols());
@@ -237,7 +246,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
         if (StringUtils.isEmpty(protocolIds)) {
             if (CollectionUtils.isEmpty(protocols)) {
                 List<ProtocolConfig> protocolConfigs = getConfigManager().getDefaultProtocols();
-                if (protocolConfigs.isEmpty()) {
+                if (CollectionUtils.isEmpty(protocolConfigs)) {
                     throw new IllegalStateException("The default protocol has not been initialized.");
                 }
                 setProtocols(protocolConfigs);
@@ -267,7 +276,7 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
         }
         try {
             if (StringUtils.isNotEmpty(interfaceName)) {
-                this.interfaceClass = Class.forName(
+                interfaceClass = Class.forName(
                         interfaceName, true, Thread.currentThread().getContextClassLoader());
             }
         } catch (ClassNotFoundException t) {
@@ -277,7 +286,6 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     }
 
     /**
-     * @param interfaceClass
      * @see #setInterface(Class)
      * @deprecated
      */
@@ -286,11 +294,8 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     }
 
     public void setInterface(Class<?> interfaceClass) {
-        // rest protocol  allow  set impl class
-        if (interfaceClass != null && !interfaceClass.isInterface() && !canSkipInterfaceCheck()) {
-            throw new IllegalStateException("The interface class " + interfaceClass + " is not a interface!");
-        }
         this.interfaceClass = interfaceClass;
+        checkInterface();
         setInterface(interfaceClass == null ? null : interfaceClass.getName());
         if (getInterfaceClassLoader() == null) {
             setInterfaceClassLoader(interfaceClass == null ? null : interfaceClass.getClassLoader());
@@ -298,20 +303,24 @@ public abstract class ServiceConfigBase<T> extends AbstractServiceConfig {
     }
 
     @Override
-    public boolean canSkipInterfaceCheck() {
-        // for multipart protocol so for each contain
-        List<ProtocolConfig> protocols = getProtocols();
-
-        if (protocols == null) {
-            return false;
+    public void checkInterface() {
+        if (interfaceClass == null || interfaceClass.isInterface()) {
+            return;
         }
-
+        List<ProtocolConfig> protocols = getProtocols();
+        if (CollectionUtils.isEmpty(protocols)) {
+            return;
+        }
         for (ProtocolConfig protocol : protocols) {
-            if (Constants.REST_PROTOCOL.equals(protocol.getName())) {
-                return true;
+            String name = protocol.getName();
+            if (CommonConstants.TRIPLE.equals(name) && Boolean.TRUE.equals(protocol.isNoInterfaceSupport())) {
+                return;
+            }
+            if (Constants.REST_PROTOCOL.equals(name)) {
+                return;
             }
         }
-        return false;
+        throw new IllegalStateException("The interface class " + interfaceClass + " is not a interface!");
     }
 
     @Transient

@@ -78,8 +78,7 @@ public abstract class AbstractAnnotationBeanPostProcessor
     private final Class<? extends Annotation>[] annotationTypes;
 
     private final ConcurrentMap<String, AbstractAnnotationBeanPostProcessor.AnnotatedInjectionMetadata>
-            injectionMetadataCache = new ConcurrentHashMap<
-                    String, AbstractAnnotationBeanPostProcessor.AnnotatedInjectionMetadata>(CACHE_SIZE);
+            injectionMetadataCache = new ConcurrentHashMap<>(CACHE_SIZE);
 
     private ConfigurableListableBeanFactory beanFactory;
 
@@ -98,7 +97,7 @@ public abstract class AbstractAnnotationBeanPostProcessor
     }
 
     private static <T> Collection<T> combine(Collection<? extends T>... elements) {
-        List<T> allElements = new ArrayList<T>();
+        List<T> allElements = new ArrayList<>();
         for (Collection<? extends T> e : elements) {
             allElements.addAll(e);
         }
@@ -399,6 +398,11 @@ public abstract class AbstractAnnotationBeanPostProcessor
             if (targetClass.isAssignableFrom(clazz) && clazz.getName().contains("$$EnhancerBySpringCGLIB$$")) {
                 return false;
             }
+
+            if (targetClass.isAssignableFrom(clazz) && clazz.getName().contains("$$SpringCGLIB$$")) {
+                return false;
+            }
+
             return true;
         }
     }
@@ -408,11 +412,11 @@ public abstract class AbstractAnnotationBeanPostProcessor
      */
     protected class AnnotatedInjectElement extends InjectionMetadata.InjectedElement {
 
-        protected final AnnotationAttributes attributes;
+        public final AnnotationAttributes attributes;
 
-        protected volatile Object injectedObject;
+        public volatile Object injectedObject;
 
-        private Class<?> injectedType;
+        public Class<?> injectedType;
 
         protected AnnotatedInjectElement(Member member, PropertyDescriptor pd, AnnotationAttributes attributes) {
             super(member, pd);
@@ -469,7 +473,7 @@ public abstract class AbstractAnnotationBeanPostProcessor
 
     protected class AnnotatedMethodElement extends AnnotatedInjectElement {
 
-        protected final Method method;
+        public final Method method;
 
         protected AnnotatedMethodElement(Method method, PropertyDescriptor pd, AnnotationAttributes attributes) {
             super(method, pd, attributes);
@@ -479,7 +483,7 @@ public abstract class AbstractAnnotationBeanPostProcessor
 
     public class AnnotatedFieldElement extends AnnotatedInjectElement {
 
-        protected final Field field;
+        public final Field field;
 
         protected AnnotatedFieldElement(Field field, AnnotationAttributes attributes) {
             super(field, null, attributes);

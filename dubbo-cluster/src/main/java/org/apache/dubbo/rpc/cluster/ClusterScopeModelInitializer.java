@@ -17,17 +17,14 @@
 package org.apache.dubbo.rpc.cluster;
 
 import org.apache.dubbo.common.beans.factory.ScopeBeanFactory;
-import org.apache.dubbo.rpc.AdaptiveMetrics;
-import org.apache.dubbo.rpc.cluster.merger.MergerFactory;
 import org.apache.dubbo.rpc.cluster.router.RouterSnapshotSwitcher;
-import org.apache.dubbo.rpc.cluster.router.mesh.route.MeshRuleManager;
 import org.apache.dubbo.rpc.cluster.support.ClusterUtils;
 import org.apache.dubbo.rpc.model.ApplicationModel;
 import org.apache.dubbo.rpc.model.FrameworkModel;
-import org.apache.dubbo.rpc.model.ModuleModel;
 import org.apache.dubbo.rpc.model.ScopeModelInitializer;
 
 public class ClusterScopeModelInitializer implements ScopeModelInitializer {
+
     @Override
     public void initializeFrameworkModel(FrameworkModel frameworkModel) {
         ScopeBeanFactory beanFactory = frameworkModel.getBeanFactory();
@@ -37,14 +34,6 @@ public class ClusterScopeModelInitializer implements ScopeModelInitializer {
     @Override
     public void initializeApplicationModel(ApplicationModel applicationModel) {
         ScopeBeanFactory beanFactory = applicationModel.getBeanFactory();
-        beanFactory.registerBean(MergerFactory.class);
         beanFactory.registerBean(ClusterUtils.class);
-        beanFactory.registerBean(AdaptiveMetrics.class);
-    }
-
-    @Override
-    public void initializeModuleModel(ModuleModel moduleModel) {
-        ScopeBeanFactory beanFactory = moduleModel.getBeanFactory();
-        beanFactory.registerBean(MeshRuleManager.class);
     }
 }

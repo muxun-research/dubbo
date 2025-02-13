@@ -16,15 +16,37 @@
  */
 package org.apache.dubbo.common.json.impl;
 
+import org.apache.dubbo.common.extension.Activate;
+
 import java.lang.reflect.Type;
 import java.util.List;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 
-public class GsonImpl extends AbstractJSONImpl {
-    // weak reference of com.google.gson.Gson, prevent throw exception when init
-    private volatile Object gsonCache = null;
+@Activate(order = 300, onClass = "com.google.gson.Gson")
+public class GsonImpl extends AbstractJsonUtilImpl {
+
+    private volatile Gson gson;
+
+    @Override
+    public String getName() {
+        return "gson";
+    }
+
+    @Override
+    public boolean isJson(String json) {
+        try {
+            JsonElement jsonElement = JsonParser.parseString(json);
+            return jsonElement.isJsonObject() || jsonElement.isJsonArray();
+        } catch (JsonSyntaxException e) {
+            return false;
+        }
+    }
 
     @Override
     public <T> T toJavaObject(String json, Type type) {
@@ -33,8 +55,8 @@ public class GsonImpl extends AbstractJSONImpl {
 
     @Override
     public <T> List<T> toJavaList(String json, Class<T> clazz) {
-        return getGson()
-                .fromJson(json, TypeToken.getParameterized(List.class, clazz).getType());
+        Type type = TypeToken.getParameterized(List.class, clazz).getType();
+        return getGson().fromJson(json, type);
     }
 
     @Override
@@ -42,14 +64,37 @@ public class GsonImpl extends AbstractJSONImpl {
         return getGson().toJson(obj);
     }
 
-    private Gson getGson() {
-        if (gsonCache == null || !(gsonCache instanceof Gson)) {
+    @Override
+    public String toPrettyJson(Object obj) {
+        return createBuilder().setPrettyPrinting().create().toJson(obj);
+    }
+
+    @Override
+    public Object convertObject(Object obj, Type type) {
+        Gson gson = getGson();
+        return gson.fromJson(gson.toJsonTree(obj), type);
+    }
+
+    @Override
+    public Object convertObject(Object obj, Class<?> clazz) {
+        Gson gson = getGson();
+        return gson.fromJson(gson.toJsonTree(obj), clazz);
+    }
+
+    protected Gson getGson() {
+        Gson gson = this.gson;
+        if (gson == null) {
             synchronized (this) {
-                if (gsonCache == null || !(gsonCache instanceof Gson)) {
-                    gsonCache = new Gson();
+                gson = this.gson;
+                if (gson == null) {
+                    this.gson = gson = createBuilder().create();
                 }
             }
         }
-        return (Gson) gsonCache;
+        return gson;
+    }
+
+    protected GsonBuilder createBuilder() {
+        return new GsonBuilder();
     }
 }

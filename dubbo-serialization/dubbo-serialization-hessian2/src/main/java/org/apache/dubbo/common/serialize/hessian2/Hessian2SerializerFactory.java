@@ -18,13 +18,19 @@ package org.apache.dubbo.common.serialize.hessian2;
 
 import org.apache.dubbo.common.utils.DefaultSerializeClassChecker;
 
+import java.io.InputStream;
 import java.io.Serializable;
 
 import com.alibaba.com.caucho.hessian.io.Deserializer;
+import com.alibaba.com.caucho.hessian.io.InputStreamDeserializer;
 import com.alibaba.com.caucho.hessian.io.JavaDeserializer;
 import com.alibaba.com.caucho.hessian.io.JavaSerializer;
+import com.alibaba.com.caucho.hessian.io.RecordDeserializer;
+import com.alibaba.com.caucho.hessian.io.RecordUtil;
 import com.alibaba.com.caucho.hessian.io.Serializer;
 import com.alibaba.com.caucho.hessian.io.SerializerFactory;
+import com.alibaba.com.caucho.hessian.io.UnsafeDeserializer;
+import com.alibaba.com.caucho.hessian.io.UnsafeSerializer;
 
 public class Hessian2SerializerFactory extends SerializerFactory {
 
@@ -54,11 +60,17 @@ public class Hessian2SerializerFactory extends SerializerFactory {
 
         checkSerializable(cl);
 
-        return new JavaSerializer(cl, getClassLoader());
+        if (isEnableUnsafeSerializer() && JavaSerializer.getWriteReplace(cl) == null) {
+            return UnsafeSerializer.create(cl);
+        } else return JavaSerializer.create(cl);
     }
 
     @Override
     protected Deserializer getDefaultDeserializer(Class cl) {
+        if (InputStream.class.equals(cl)) {
+            return InputStreamDeserializer.DESER;
+        }
+
         try {
             // pre-check if class is allow
             defaultSerializeClassChecker.loadClass(getClassLoader(), cl.getName());
@@ -68,7 +80,13 @@ public class Hessian2SerializerFactory extends SerializerFactory {
 
         checkSerializable(cl);
 
-        return new JavaDeserializer(cl);
+        if (RecordUtil.isRecord(cl)) {
+            return new RecordDeserializer(cl, getFieldDeserializerFactory());
+        } else {
+            if (isEnableUnsafeSerializer()) {
+                return new UnsafeDeserializer(cl, getFieldDeserializerFactory());
+            } else return new JavaDeserializer(cl, getFieldDeserializerFactory());
+        }
     }
 
     private void checkSerializable(Class<?> cl) {

@@ -17,8 +17,6 @@
 package org.apache.dubbo.remoting.transport;
 
 import org.apache.dubbo.common.URL;
-import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
-import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
 import org.apache.dubbo.common.utils.ConcurrentHashSet;
 import org.apache.dubbo.common.utils.ExecutorUtil;
@@ -42,26 +40,13 @@ import static org.apache.dubbo.remoting.Constants.ACCEPTS_KEY;
 import static org.apache.dubbo.remoting.Constants.DEFAULT_ACCEPTS;
 
 /**
- * 抽象远程服务端
  * AbstractServer
  */
 public abstract class AbstractServer extends AbstractEndpoint implements RemotingServer {
-    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(AbstractServer.class);
-    /**
-     * 线程池
-     */
+
     private Set<ExecutorService> executors = new ConcurrentHashSet<>();
-    /**
-     * 服务地址
-     */
     private InetSocketAddress localAddress;
-    /**
-     * 绑定地址
-     */
     private InetSocketAddress bindAddress;
-    /**
-     * 服务器最大可接受连接数
-     */
     private int accepts;
 
     private ExecutorRepository executorRepository;
@@ -69,19 +54,16 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
     public AbstractServer(URL url, ChannelHandler handler) throws RemotingException {
         super(url, handler);
         executorRepository = ExecutorRepository.getInstance(url.getOrDefaultApplicationModel());
-        // 服务地址Socket
         localAddress = getUrl().toInetSocketAddress();
-        // 获取绑定的HOST和PORT
+
         String bindIp = getUrl().getParameter(Constants.BIND_IP_KEY, getUrl().getHost());
         int bindPort = getUrl().getParameter(Constants.BIND_PORT_KEY, getUrl().getPort());
         if (url.getParameter(ANYHOST_KEY, false) || NetUtils.isInvalidLocalHost(bindIp)) {
             bindIp = ANYHOST_VALUE;
         }
         bindAddress = new InetSocketAddress(bindIp, bindPort);
-        // 服务端最大可接受连接数，默认为0
         this.accepts = url.getParameter(ACCEPTS_KEY, DEFAULT_ACCEPTS);
         try {
-            // 创建连接
             doOpen();
             if (logger.isInfoEnabled()) {
                 logger.info("Start " + getClass().getSimpleName() + " bind " + getBindAddress() + ", export "
@@ -95,9 +77,6 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
                             + t.getMessage(),
                     t);
         }
-        // 从DataStore中获取线程池
-        // dataStore的实现是一个Map<?, Map<?, ?>>类型
-        // 获取对应的类型及端口的线程池
         executors.add(
                 executorRepository.createExecutorIfAbsent(ExecutorUtil.setThreadName(url, SERVER_THREAD_POOL_NAME)));
     }
@@ -114,8 +93,7 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
             return;
         }
 
-		try {
-			// 从URL中重新获取服务端最大可接受连接数
+        try {
             if (url.hasParameter(ACCEPTS_KEY)) {
                 int a = url.getParameter(ACCEPTS_KEY, 0);
                 if (a > 0) {
@@ -133,14 +111,10 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
         super.setUrl(getUrl().addParameters(url.getParameters()));
     }
 
-    /**
-     * 服务端发送消息，需要遍历所有创建Channel
-     */
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
         Collection<Channel> channels = getChannels();
         for (Channel channel : channels) {
-            // 在Channel处于连接状态的情况下，发送消息
             if (channel.isConnected()) {
                 channel.send(message, sent);
             }
@@ -155,7 +129,6 @@ public abstract class AbstractServer extends AbstractEndpoint implements Remotin
         }
 
         for (ExecutorService executor : executors) {
-            // 关闭连接池
             ExecutorUtil.shutdownNow(executor, 100);
         }
 

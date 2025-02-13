@@ -17,6 +17,7 @@
 package org.apache.dubbo.rpc.protocol.tri.stream;
 
 import org.apache.dubbo.common.utils.JsonUtils;
+import org.apache.dubbo.remoting.http12.HttpHeaderNames;
 import org.apache.dubbo.rpc.TriRpcStatus;
 import org.apache.dubbo.rpc.protocol.tri.TripleHeaderEnum;
 
@@ -50,25 +51,25 @@ class StreamUtilsTest {
         headers.add("key", "value");
 
         Map<String, Object> attachments = new HashMap<>();
-        attachments.put(TripleHeaderEnum.PATH_KEY.getHeader(), "value");
+        attachments.put(HttpHeaderNames.PATH.getName(), "value");
         attachments.put("key1111", "value");
         attachments.put("Upper", "Upper");
         attachments.put("obj", new Object());
 
-        StreamUtils.convertAttachment(headers, attachments, false);
-        Assertions.assertNull(headers.get(TripleHeaderEnum.PATH_KEY.getHeader()));
+        StreamUtils.putHeaders(headers, attachments, false);
+        Assertions.assertNull(headers.get(HttpHeaderNames.PATH.getName()));
         Assertions.assertNull(headers.get("Upper"));
         Assertions.assertNull(headers.get("obj"));
 
         headers = new DefaultHttp2Headers();
         headers.add("key", "value");
 
-        StreamUtils.convertAttachment(headers, attachments, true);
-        Assertions.assertNull(headers.get(TripleHeaderEnum.PATH_KEY.getHeader()));
+        StreamUtils.putHeaders(headers, attachments, true);
+        Assertions.assertNull(headers.get(HttpHeaderNames.PATH.getName()));
         Assertions.assertNull(headers.get("Upper"));
         Assertions.assertNull(headers.get("obj"));
         String jsonRaw =
-                headers.get(TripleHeaderEnum.TRI_HEADER_CONVERT.getHeader()).toString();
+                headers.get(TripleHeaderEnum.TRI_HEADER_CONVERT.getName()).toString();
         String json = TriRpcStatus.decodeMessage(jsonRaw);
         System.out.println(jsonRaw + "---" + json);
         Map<String, String> upperMap = JsonUtils.toJavaObject(json, Map.class);
@@ -81,7 +82,7 @@ class StreamUtilsTest {
             String randomKey = "key" + i;
             String randomValue = "value" + i;
             Map<String, Object> attachments2 = new HashMap<>();
-            attachments2.put(TripleHeaderEnum.PATH_KEY.getHeader(), "value");
+            attachments2.put(HttpHeaderNames.PATH.getName(), "value");
             attachments2.put("key1111", "value");
             attachments2.put("Upper", "Upper");
             attachments2.put("obj", new Object());
@@ -89,9 +90,9 @@ class StreamUtilsTest {
             executorService.execute(() -> {
                 DefaultHttp2Headers headers2 = new DefaultHttp2Headers();
                 headers2.add("key", "value");
-                StreamUtils.convertAttachment(headers2, attachments2, true);
+                StreamUtils.putHeaders(headers2, attachments2, true);
 
-                if (headers2.get(TripleHeaderEnum.PATH_KEY.getHeader()) != null) {
+                if (headers2.get(HttpHeaderNames.PATH.getName()) != null) {
                     return;
                 }
                 if (headers2.get("Upper") != null) {

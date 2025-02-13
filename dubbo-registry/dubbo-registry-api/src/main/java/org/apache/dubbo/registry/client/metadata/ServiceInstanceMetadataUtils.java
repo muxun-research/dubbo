@@ -21,6 +21,7 @@ import org.apache.dubbo.common.constants.RegistryConstants;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.JsonUtils;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.metadata.MetadataInfo;
@@ -94,6 +95,8 @@ public class ServiceInstanceMetadataUtils {
      * The property name of metadata storage type.
      */
     public static final String METADATA_STORAGE_TYPE_PROPERTY_NAME = "dubbo.metadata.storage-type";
+
+    public static final String METADATA_SERVICE_VERSION_NAME = "meta-v";
 
     public static final String METADATA_CLUSTER_PROPERTY_NAME = "dubbo.metadata.cluster";
 
@@ -204,19 +207,21 @@ public class ServiceInstanceMetadataUtils {
     }
 
     public static void registerMetadataAndInstance(ApplicationModel applicationModel) {
-        LOGGER.info("Start registering instance address to registry.");
         RegistryManager registryManager = applicationModel.getBeanFactory().getBean(RegistryManager.class);
         // register service instance
-        List<ServiceDiscovery> serviceDiscoveries = registryManager.getServiceDiscoveries();
-        for (ServiceDiscovery serviceDiscovery : serviceDiscoveries) {
-            MetricsEventBus.post(
-                    RegistryEvent.toRegisterEvent(
-                            applicationModel, Collections.singletonList(getServiceDiscoveryName(serviceDiscovery))),
-                    () -> {
-                        // register service instance
-                        serviceDiscoveries.forEach(ServiceDiscovery::register);
-                        return null;
-                    });
+        if (CollectionUtils.isNotEmpty(registryManager.getServiceDiscoveries())) {
+            LOGGER.info("Start registering instance address to registry.");
+            List<ServiceDiscovery> serviceDiscoveries = registryManager.getServiceDiscoveries();
+            for (ServiceDiscovery serviceDiscovery : serviceDiscoveries) {
+                MetricsEventBus.post(
+                        RegistryEvent.toRegisterEvent(
+                                applicationModel, Collections.singletonList(getServiceDiscoveryName(serviceDiscovery))),
+                        () -> {
+                            // register service instance
+                            serviceDiscovery.register();
+                            return null;
+                        });
+            }
         }
     }
 

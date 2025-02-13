@@ -16,16 +16,18 @@
  */
 package org.apache.dubbo.rpc.protocol.tri.transport;
 
-import org.apache.dubbo.common.ServiceKey;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.remoting.http12.HttpHeaders;
+import org.apache.dubbo.remoting.http12.RequestMetadata;
 import org.apache.dubbo.rpc.executor.AbstractIsolationExecutorSupport;
+import org.apache.dubbo.rpc.protocol.tri.RequestPath;
 import org.apache.dubbo.rpc.protocol.tri.TripleHeaderEnum;
-
-import io.netty.handler.codec.http2.Http2Headers;
+import org.apache.dubbo.rpc.protocol.tri.rest.RestConstants;
 
 public class TripleIsolationExecutorSupport extends AbstractIsolationExecutorSupport {
+
     private static final ErrorTypeAwareLogger logger =
             LoggerFactory.getErrorTypeAwareLogger(TripleIsolationExecutorSupport.class);
 
@@ -34,21 +36,32 @@ public class TripleIsolationExecutorSupport extends AbstractIsolationExecutorSup
     }
 
     @Override
-    protected ServiceKey getServiceKey(Object data) {
-        if (!(data instanceof Http2Headers)) {
-            return null;
+    protected String getServiceKey(Object data) {
+        if (data instanceof RequestMetadata) {
+            RequestMetadata httpMetadata = (RequestMetadata) data;
+            RequestPath path = RequestPath.parse(httpMetadata.path());
+            if (path == null) {
+                return null;
+            }
+            HttpHeaders headers = httpMetadata.headers();
+            return URL.buildKey(
+                    path.getServiceInterface(),
+                    getHeader(headers, TripleHeaderEnum.SERVICE_GROUP, RestConstants.HEADER_SERVICE_GROUP),
+                    getHeader(headers, TripleHeaderEnum.SERVICE_VERSION, RestConstants.HEADER_SERVICE_VERSION));
         }
 
-        Http2Headers headers = (Http2Headers) data;
-        String path = headers.path().toString();
-        String[] parts = path.split("/"); // path like /{interfaceName}/{methodName}
-        String interfaceName = parts[1];
-        String version = headers.contains(TripleHeaderEnum.SERVICE_VERSION.getHeader())
-                ? headers.get(TripleHeaderEnum.SERVICE_VERSION.getHeader()).toString()
-                : null;
-        String group = headers.contains(TripleHeaderEnum.SERVICE_GROUP.getHeader())
-                ? headers.get(TripleHeaderEnum.SERVICE_GROUP.getHeader()).toString()
-                : null;
-        return new ServiceKey(interfaceName, version, group);
+        if (data instanceof URL) {
+            return ((URL) data).getServiceKey();
+        }
+
+        return null;
+    }
+
+    private static String getHeader(HttpHeaders headers, TripleHeaderEnum en, String key) {
+        String value = headers.getFirst(en.getKey());
+        if (value == null) {
+            value = headers.getFirst(key);
+        }
+        return value;
     }
 }

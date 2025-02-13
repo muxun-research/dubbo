@@ -18,7 +18,12 @@ package org.apache.dubbo.config.nested;
 
 import java.io.Serializable;
 
+/**
+ * Configuration for the propagation.
+ */
 public class PropagationConfig implements Serializable {
+
+    private static final long serialVersionUID = -2570106396211532046L;
 
     public static final String B3 = "B3";
 
@@ -28,6 +33,12 @@ public class PropagationConfig implements Serializable {
      * Tracing context propagation type.
      */
     private String type = W3C;
+
+    public PropagationConfig() {}
+
+    public PropagationConfig(String type) {
+        this.type = type;
+    }
 
     public String getType() {
         return type;

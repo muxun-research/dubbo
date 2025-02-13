@@ -16,13 +16,21 @@
  */
 package org.apache.dubbo.common.io;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Stream utils.
  */
-public class StreamUtils {
+public final class StreamUtils {
+
+    public static final ByteArrayInputStream EMPTY = new ByteArrayInputStream(new byte[0]);
+
     private StreamUtils() {}
 
     public static InputStream limitedInputStream(final InputStream is, final int limit) throws IOException {
@@ -228,5 +236,52 @@ public class StreamUtils {
         if (is.available() > 0) {
             is.skip(is.available());
         }
+    }
+
+    public static void copy(InputStream in, OutputStream out) throws IOException {
+        if (in.getClass() == ByteArrayInputStream.class) {
+            copy((ByteArrayInputStream) in, out);
+            return;
+        }
+        byte[] buffer = new byte[4096];
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+        }
+    }
+
+    public static void copy(ByteArrayInputStream in, OutputStream out) throws IOException {
+        int len = in.available();
+        byte[] buffer = new byte[len];
+        in.read(buffer, 0, len);
+        out.write(buffer, 0, len);
+    }
+
+    public static byte[] readBytes(InputStream in) throws IOException {
+        if (in.getClass() == ByteArrayInputStream.class) {
+            return readBytes((ByteArrayInputStream) in);
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream(1024);
+        byte[] buffer = new byte[4096];
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+        }
+        return out.toByteArray();
+    }
+
+    public static byte[] readBytes(ByteArrayInputStream in) throws IOException {
+        int len = in.available();
+        byte[] bytes = new byte[len];
+        in.read(bytes, 0, len);
+        return bytes;
+    }
+
+    public static String toString(InputStream in) throws IOException {
+        return new String(readBytes(in), StandardCharsets.UTF_8);
+    }
+
+    public static String toString(InputStream in, Charset charset) throws IOException {
+        return new String(readBytes(in), charset);
     }
 }

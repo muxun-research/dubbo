@@ -18,6 +18,7 @@ package org.apache.dubbo.rpc;
 
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.remoting.TimeoutException;
+import org.apache.dubbo.remoting.http12.exception.HttpStatusException;
 
 import java.io.Serializable;
 
@@ -25,6 +26,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import io.netty.handler.codec.http.QueryStringEncoder;
 
+import static org.apache.dubbo.rpc.RpcException.AUTHORIZATION_EXCEPTION;
 import static org.apache.dubbo.rpc.RpcException.FORBIDDEN_EXCEPTION;
 import static org.apache.dubbo.rpc.RpcException.LIMIT_EXCEEDED_EXCEPTION;
 import static org.apache.dubbo.rpc.RpcException.METHOD_NOT_FOUND;
@@ -35,9 +37,11 @@ import static org.apache.dubbo.rpc.RpcException.TIMEOUT_TERMINATE;
 import static org.apache.dubbo.rpc.RpcException.UNKNOWN_EXCEPTION;
 
 /**
- * See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
+ * See <a href="https://github.com/grpc/grpc/blob/master/doc/statuscodes.md">status codes</a>
  */
 public class TriRpcStatus implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     public static final TriRpcStatus OK = fromCode(Code.OK);
     public static final TriRpcStatus UNKNOWN = fromCode(Code.UNKNOWN);
@@ -74,6 +78,10 @@ public class TriRpcStatus implements Serializable {
     }
 
     public static TriRpcStatus getStatus(Throwable throwable, String description) {
+        if (throwable instanceof HttpStatusException) {
+            int statusCode = ((HttpStatusException) throwable).getStatusCode();
+            return new TriRpcStatus(httpStatusToGrpcCode(statusCode), throwable, description);
+        }
         if (throwable instanceof StatusRpcException) {
             return ((StatusRpcException) throwable).getStatus();
         }
@@ -118,6 +126,9 @@ public class TriRpcStatus implements Serializable {
                 break;
             case FORBIDDEN_EXCEPTION:
                 code = Code.PERMISSION_DENIED;
+                break;
+            case AUTHORIZATION_EXCEPTION:
+                code = Code.UNAUTHENTICATED;
                 break;
             case LIMIT_EXCEEDED_EXCEPTION:
             case NETWORK_EXCEPTION:
@@ -185,6 +196,42 @@ public class TriRpcStatus implements Serializable {
             return Code.UNAVAILABLE;
         } else {
             return Code.UNKNOWN;
+        }
+    }
+
+    public static int grpcCodeToHttpStatus(Code code) {
+        switch (code) {
+            case OK:
+                return HttpResponseStatus.OK.code();
+            case CANCELLED:
+                return 499;
+            case UNKNOWN:
+            case DATA_LOSS:
+            case INTERNAL:
+                return HttpResponseStatus.INTERNAL_SERVER_ERROR.code();
+            case INVALID_ARGUMENT:
+            case FAILED_PRECONDITION:
+            case OUT_OF_RANGE:
+                return HttpResponseStatus.BAD_REQUEST.code();
+            case DEADLINE_EXCEEDED:
+                return HttpResponseStatus.GATEWAY_TIMEOUT.code();
+            case NOT_FOUND:
+                return HttpResponseStatus.NOT_FOUND.code();
+            case ALREADY_EXISTS:
+            case ABORTED:
+                return HttpResponseStatus.CONFLICT.code();
+            case PERMISSION_DENIED:
+                return HttpResponseStatus.FORBIDDEN.code();
+            case RESOURCE_EXHAUSTED:
+                return HttpResponseStatus.TOO_MANY_REQUESTS.code();
+            case UNIMPLEMENTED:
+                return HttpResponseStatus.NOT_IMPLEMENTED.code();
+            case UNAVAILABLE:
+                return HttpResponseStatus.SERVICE_UNAVAILABLE.code();
+            case UNAUTHENTICATED:
+                return HttpResponseStatus.UNAUTHORIZED.code();
+            default:
+                return -1;
         }
     }
 

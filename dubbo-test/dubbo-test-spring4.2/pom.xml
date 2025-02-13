@@ -28,7 +28,7 @@
 
   <properties>
     <skip_maven_deploy>true</skip_maven_deploy>
-    <spring_version>4.2.4.RELEASE</spring_version>
+    <spring_version>5.3.39</spring_version>
   </properties>
 
   <dependencyManagement>
@@ -85,10 +85,18 @@
 
   <profiles>
     <profile>
-      <id>jdk15ge-simple</id>
+      <id>jdk15ge-add-open</id>
       <activation>
         <jdk>[15,</jdk>
       </activation>
+      <properties>
+        <argLine>--add-opens java.base/java.lang=ALL-UNNAMED
+          --add-opens java.base/java.math=ALL-UNNAMED
+          --add-opens java.base/java.util=ALL-UNNAMED</argLine>
+      </properties>
+    </profile>
+    <profile>
+      <id>jdk15ge-simple</id>
       <build>
         <plugins>
           <plugin>
@@ -96,11 +104,7 @@
             <artifactId>maven-surefire-plugin</artifactId>
             <configuration>
               <useSystemClassLoader>true</useSystemClassLoader>
-              <forkMode>once</forkMode>
-              <argLine>${argline} ${jacocoArgLine}
-                                --add-opens java.base/java.lang=ALL-UNNAMED
-                                --add-opens java.base/java.math=ALL-UNNAMED
-                                --add-opens java.base/java.util=ALL-UNNAMED</argLine>
+              <forkCount>1</forkCount>
               <systemProperties>
                 <!-- common shared -->
               </systemProperties>

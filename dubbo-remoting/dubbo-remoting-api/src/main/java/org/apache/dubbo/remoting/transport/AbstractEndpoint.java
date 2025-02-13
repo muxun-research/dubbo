@@ -36,14 +36,10 @@ import static org.apache.dubbo.rpc.model.ScopeModelUtil.getFrameworkModel;
  */
 public abstract class AbstractEndpoint extends AbstractPeer implements Resetable {
 
-    private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(AbstractEndpoint.class);
-    /**
-     * 编解码器
-     */
+    protected final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(getClass());
+
     private Codec2 codec;
-    /**
-     * 连接超时时间
-     */
+
     private int connectTimeout;
 
     public AbstractEndpoint(URL url, ChannelHandler handler) {
@@ -53,15 +49,14 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
                 url.getPositiveParameter(Constants.CONNECT_TIMEOUT_KEY, Constants.DEFAULT_CONNECT_TIMEOUT);
     }
 
+    protected AbstractEndpoint() {}
+
     protected static Codec2 getChannelCodec(URL url) {
-        // 获取url中的编解码器，默认为telnet
         String codecName = url.getParameter(Constants.CODEC_KEY);
         if (StringUtils.isEmpty(codecName)) {
             // codec extension name must stay the same with protocol name
             codecName = url.getProtocol();
         }
-        // 从SPI中获取对应的编解码器
-        // 示例：在DubboProtocol中，会使用DubboCodec
         FrameworkModel frameworkModel = getFrameworkModel(url.getScopeModel());
         if (frameworkModel.getExtensionLoader(Codec2.class).hasExtension(codecName)) {
             return frameworkModel.getExtensionLoader(Codec2.class).getExtension(codecName);
@@ -73,10 +68,6 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
         }
     }
 
-    /**
-     * 重置URL
-     * @param url
-     */
     @Override
     public void reset(URL url) {
         if (isClosed()) {
@@ -85,7 +76,6 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
         }
 
         try {
-            // 从URL中重新获取timeout
             if (url.hasParameter(Constants.CONNECT_TIMEOUT_KEY)) {
                 int t = url.getParameter(Constants.CONNECT_TIMEOUT_KEY, 0);
                 if (t > 0) {
@@ -97,9 +87,7 @@ public abstract class AbstractEndpoint extends AbstractPeer implements Resetable
         }
 
         try {
-            // 从URL中重新获取connectTimeout
             if (url.hasParameter(Constants.CODEC_KEY)) {
-                // 从URL中重新获取codec
                 this.codec = getChannelCodec(url);
             }
         } catch (Throwable t) {

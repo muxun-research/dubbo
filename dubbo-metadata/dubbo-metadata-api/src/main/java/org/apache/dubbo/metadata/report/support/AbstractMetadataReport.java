@@ -23,6 +23,7 @@ import org.apache.dubbo.common.utils.CollectionUtils;
 import org.apache.dubbo.common.utils.ConfigUtils;
 import org.apache.dubbo.common.utils.JsonUtils;
 import org.apache.dubbo.common.utils.NamedThreadFactory;
+import org.apache.dubbo.common.utils.SystemPropertyConfigUtils;
 import org.apache.dubbo.metadata.definition.model.FullServiceDefinition;
 import org.apache.dubbo.metadata.definition.model.ServiceDefinition;
 import org.apache.dubbo.metadata.report.MetadataReport;
@@ -70,6 +71,7 @@ import static org.apache.dubbo.common.constants.CommonConstants.REPORT_METADATA_
 import static org.apache.dubbo.common.constants.CommonConstants.RETRY_PERIOD_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.RETRY_TIMES_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.SYNC_REPORT_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.SystemProperty.USER_HOME;
 import static org.apache.dubbo.common.constants.LoggerCodeConstants.COMMON_UNEXPECTED_EXCEPTION;
 import static org.apache.dubbo.common.constants.LoggerCodeConstants.PROXY_FAILED_EXPORT_SERVICE;
 import static org.apache.dubbo.common.utils.StringUtils.replace;
@@ -78,13 +80,12 @@ import static org.apache.dubbo.metadata.report.support.Constants.DEFAULT_METADAT
 import static org.apache.dubbo.metadata.report.support.Constants.DEFAULT_METADATA_REPORT_RETRY_PERIOD;
 import static org.apache.dubbo.metadata.report.support.Constants.DEFAULT_METADATA_REPORT_RETRY_TIMES;
 import static org.apache.dubbo.metadata.report.support.Constants.DUBBO_METADATA;
-import static org.apache.dubbo.metadata.report.support.Constants.USER_HOME;
 
 public abstract class AbstractMetadataReport implements MetadataReport {
 
     protected static final String DEFAULT_ROOT = "dubbo";
 
-    private static final int ONE_DAY_IN_MILLISECONDS = 60 * 24 * 60 * 1000;
+    protected static final int ONE_DAY_IN_MILLISECONDS = 60 * 24 * 60 * 1000;
     private static final int FOUR_HOURS_IN_MILLISECONDS = 60 * 4 * 60 * 1000;
     // Log output
     protected final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(getClass());
@@ -116,7 +117,8 @@ public abstract class AbstractMetadataReport implements MetadataReport {
 
         boolean localCacheEnabled = reportServerURL.getParameter(REGISTRY_LOCAL_FILE_CACHE_ENABLED, true);
         // Start file save timer
-        String defaultFilename = System.getProperty(USER_HOME) + DUBBO_METADATA + reportServerURL.getApplication()
+        String defaultFilename = SystemPropertyConfigUtils.getSystemProperty(USER_HOME) + DUBBO_METADATA
+                + reportServerURL.getApplication()
                 + "-" + replace(reportServerURL.getAddress(), ":", "-")
                 + CACHE;
         String filename = reportServerURL.getParameter(FILE_KEY, defaultFilename);

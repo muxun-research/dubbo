@@ -42,7 +42,7 @@ public class NettyHandler extends SimpleChannelHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyHandler.class);
 
-    private final Map<String, Channel> channels = new ConcurrentHashMap<String, Channel>(); // <ip:port, channel>
+    private final Map<String, Channel> channels = new ConcurrentHashMap<>(); // <ip:port, channel>
 
     private final URL url;
 
@@ -78,7 +78,7 @@ public class NettyHandler extends SimpleChannelHandler {
             NettyChannel.removeChannelIfDisconnected(ctx.getChannel());
         }
 
-        if (logger.isInfoEnabled()) {
+        if (logger.isInfoEnabled() && channel != null) {
             logger.info("The connection between " + channel.getRemoteAddress() + " and " + channel.getLocalAddress()
                     + " is established");
         }

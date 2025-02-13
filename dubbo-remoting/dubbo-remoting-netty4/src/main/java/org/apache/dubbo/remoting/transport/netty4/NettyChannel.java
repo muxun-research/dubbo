@@ -16,8 +16,6 @@
  */
 package org.apache.dubbo.remoting.transport.netty4;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.logger.ErrorTypeAwareLogger;
 import org.apache.dubbo.common.logger.LoggerFactory;
@@ -37,6 +35,7 @@ import org.apache.dubbo.rpc.model.FrameworkModel;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,31 +60,30 @@ final class NettyChannel extends AbstractChannel {
 
     private static final ErrorTypeAwareLogger logger = LoggerFactory.getErrorTypeAwareLogger(NettyChannel.class);
     /**
-     * 缓存一份Netty Channel和Dubbo Channel的数据
+     * the cache for netty channel and dubbo channel
      */
-    private static final ConcurrentMap<Channel, NettyChannel> CHANNEL_MAP =
-            new ConcurrentHashMap<Channel, NettyChannel>();
+    private static final ConcurrentMap<Channel, NettyChannel> CHANNEL_MAP = new ConcurrentHashMap<>();
     /**
      * netty channel
      */
     private final Channel channel;
 
-    private final Map<String, Object> attributes = new ConcurrentHashMap<String, Object>();
+    private final Map<String, Object> attributes = new ConcurrentHashMap<>();
 
     private final AtomicBoolean active = new AtomicBoolean(false);
 
     private final Netty4BatchWriteQueue writeQueue;
 
-    private Codec2 codec;
-
     private final boolean encodeInIOThread;
+
+    private Codec2 codec;
 
     /**
      * The constructor of NettyChannel.
      * It is private so NettyChannel usually create by {@link NettyChannel#getOrAddChannel(Channel, URL, ChannelHandler)}
      *
      * @param channel netty channel
-     * @param url
+     * @param url     dubbo url
      * @param handler dubbo handler that contain netty handler
      */
     private NettyChannel(Channel channel, URL url, ChannelHandler handler) {
@@ -97,6 +95,7 @@ final class NettyChannel extends AbstractChannel {
         this.writeQueue = Netty4BatchWriteQueue.createWriteQueue(channel);
         this.codec = getChannelCodec(url);
         this.encodeInIOThread = getUrl().getParameter(ENCODE_IN_IO_THREAD_KEY, DEFAULT_ENCODE_IN_IO_THREAD);
+        AddressUtils.initAddressIfNecessary(this);
     }
 
     /**
@@ -104,9 +103,8 @@ final class NettyChannel extends AbstractChannel {
      * Put netty channel into it if dubbo channel don't exist in the cache.
      *
      * @param ch      netty channel
-     * @param url
+     * @param url     dubbo url
      * @param handler dubbo handler that contain netty's handler
-     * @return
      */
     static NettyChannel getOrAddChannel(Channel ch, URL url, ChannelHandler handler) {
         if (ch == null) {
@@ -153,12 +151,20 @@ final class NettyChannel extends AbstractChannel {
 
     @Override
     public InetSocketAddress getLocalAddress() {
-        return (InetSocketAddress) channel.localAddress();
+        return AddressUtils.getLocalAddress(this);
     }
 
     @Override
     public InetSocketAddress getRemoteAddress() {
-        return (InetSocketAddress) channel.remoteAddress();
+        return AddressUtils.getRemoteAddress(this);
+    }
+
+    public String getLocalAddressKey() {
+        return AddressUtils.getLocalAddressKey(this);
+    }
+
+    public String getRemoteAddressKey() {
+        return AddressUtils.getRemoteAddressKey(this);
     }
 
     @Override
@@ -175,9 +181,10 @@ final class NettyChannel extends AbstractChannel {
     }
 
     /**
-     * 使用Netty4发送消息，并判断是否需要等待发送完成
-     * @param message 需要发送的消息
-     * @param sent    是否对异步发送消息做出响应
+     * Send message by netty and whether to wait the completion of the sending.
+     *
+     * @param message message that need send.
+     * @param sent    whether to ack async-sent
      * @throws RemotingException throw RemotingException if wait until timeout or any exception thrown by method body that surrounded by try-catch.
      */
     @Override
@@ -195,24 +202,20 @@ final class NettyChannel extends AbstractChannel {
                 codec.encode(this, buffer, message);
                 outputMessage = buf;
             }
-            // 向通道写入
-            ChannelFuture future = writeQueue.enqueue(outputMessage).addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(ChannelFuture future) throws Exception {
-                    if (!(message instanceof Request)) {
+            ChannelFuture future = writeQueue.enqueue(outputMessage).addListener((ChannelFutureListener) f -> {
+                if (!(message instanceof Request)) {
+                    return;
+                }
+                ChannelHandler handler = getChannelHandler();
+                if (f.isSuccess()) {
+                    handler.sent(NettyChannel.this, message);
+                } else {
+                    Throwable t = f.cause();
+                    if (t == null) {
                         return;
                     }
-                    ChannelHandler handler = getChannelHandler();
-                    if (future.isSuccess()) {
-                        handler.sent(NettyChannel.this, message);
-                    } else {
-                        Throwable t = future.cause();
-                        if (t == null) {
-                            return;
-                        }
-                        Response response = buildErrorResponse((Request) message, t);
-                        handler.received(NettyChannel.this, response);
-                    }
+                    Response response = buildErrorResponse((Request) message, t);
+                    handler.received(NettyChannel.this, response);
                 }
             });
 
@@ -221,7 +224,6 @@ final class NettyChannel extends AbstractChannel {
                 timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
                 success = future.await(timeout);
             }
-            // 抛出异常
             Throwable cause = future.cause();
             if (cause != null) {
                 throw cause;
@@ -234,7 +236,6 @@ final class NettyChannel extends AbstractChannel {
                             + getRemoteAddress() + ", cause: " + e.getMessage(),
                     e);
         }
-        // 如果没有发送成功，抛出异常
         if (!success) {
             throw new RemotingException(
                     this,
@@ -323,18 +324,7 @@ final class NettyChannel extends AbstractChannel {
             return channel.equals(client.getNettyChannel());
         }
 
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        NettyChannel other = (NettyChannel) obj;
-        if (channel == null) {
-            if (other.channel != null) {
-                return false;
-            }
-        } else if (!channel.equals(other.channel)) {
-            return false;
-        }
-        return true;
+        return getClass() == obj.getClass() && Objects.equals(channel, ((NettyChannel) obj).channel);
     }
 
     @Override
@@ -364,6 +354,7 @@ final class NettyChannel extends AbstractChannel {
         return response;
     }
 
+    @SuppressWarnings("deprecation")
     private static Codec2 getChannelCodec(URL url) {
         String codecName = url.getParameter(Constants.CODEC_KEY);
         if (StringUtils.isEmpty(codecName)) {

@@ -22,7 +22,7 @@ dubbo:
   application:
     name: ${spring.application.name}
   protocol:
-    name: dubbo
+    name: tri
     port: -1
   registry:
     id: zk-registry
@@ -41,7 +41,3 @@ dubbo:
       exporter:
         enabled: true
     enable-metadata: true
-logging:
-  pattern:
-    level: '%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]'
-

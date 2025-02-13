@@ -87,7 +87,7 @@ public class ConfigUtils {
      */
     public static List<String> mergeValues(
             ExtensionDirector extensionDirector, Class<?> type, String cfg, List<String> def) {
-        List<String> defaults = new ArrayList<String>();
+        List<String> defaults = new ArrayList<>();
         if (def != null) {
             for (String name : def) {
                 if (extensionDirector.getExtensionLoader(type).hasExtension(name)) {
@@ -96,7 +96,7 @@ public class ConfigUtils {
             }
         }
 
-        List<String> names = new ArrayList<String>();
+        List<String> names = new ArrayList<>();
 
         // add initial values
         String[] configs = (cfg == null || cfg.trim().length() == 0) ? new String[0] : COMMA_SPLIT_PATTERN.split(cfg);
@@ -164,9 +164,9 @@ public class ConfigUtils {
      * @return
      */
     public static Properties getProperties(Set<ClassLoader> classLoaders) {
-        String path = System.getProperty(CommonConstants.DUBBO_PROPERTIES_KEY);
+        String path = SystemPropertyConfigUtils.getSystemProperty(CommonConstants.DubboProperty.DUBBO_PROPERTIES_KEY);
         if (StringUtils.isEmpty(path)) {
-            path = System.getenv(CommonConstants.DUBBO_PROPERTIES_KEY);
+            path = System.getenv(CommonConstants.DubboProperty.DUBBO_PROPERTIES_KEY);
             if (StringUtils.isEmpty(path)) {
                 path = CommonConstants.DEFAULT_DUBBO_PROPERTIES;
             }

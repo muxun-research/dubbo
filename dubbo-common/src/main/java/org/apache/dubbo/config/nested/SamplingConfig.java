@@ -18,12 +18,23 @@ package org.apache.dubbo.config.nested;
 
 import java.io.Serializable;
 
+/**
+ * Configuration for the sampling.
+ */
 public class SamplingConfig implements Serializable {
+
+    private static final long serialVersionUID = -7456034528275916549L;
 
     /**
      * Probability in the range from 0.0 to 1.0 that a trace will be sampled.
      */
     private float probability = 0.10f;
+
+    public SamplingConfig() {}
+
+    public SamplingConfig(float probability) {
+        this.probability = probability;
+    }
 
     public float getProbability() {
         return this.probability;

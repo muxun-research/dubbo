@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -193,7 +194,7 @@ public class UrlUtils {
             throw new IllegalArgumentException(
                     "Addresses is not allowed to be empty, please re-enter."); // here won't be empty
         }
-        List<URL> registries = new ArrayList<URL>();
+        List<URL> registries = new ArrayList<>();
         for (String addr : addresses) {
             registries.add(parseURL(addr, defaults));
         }
@@ -697,5 +698,11 @@ public class UrlUtils {
 
     public static boolean isConsumer(URL url) {
         return url.getProtocol().equalsIgnoreCase(CONSUMER) || url.getPort() == 0;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T computeServiceAttribute(URL url, String key, Function<URL, T> fn) {
+        return (T)
+                url.getServiceModel().getServiceMetadata().getAttributeMap().computeIfAbsent(key, k -> fn.apply(url));
     }
 }

@@ -16,83 +16,90 @@
  */
 package org.apache.dubbo.common.utils;
 
-import org.apache.dubbo.common.constants.CommonConstants;
-import org.apache.dubbo.common.json.JSON;
-import org.apache.dubbo.common.json.impl.FastJson2Impl;
-import org.apache.dubbo.common.json.impl.FastJsonImpl;
-import org.apache.dubbo.common.json.impl.GsonImpl;
-import org.apache.dubbo.common.json.impl.JacksonImpl;
+import org.apache.dubbo.common.extension.Activate;
+import org.apache.dubbo.common.json.JsonUtil;
 
 import java.lang.reflect.Type;
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.TreeMap;
+
+import static org.apache.dubbo.common.constants.CommonConstants.DubboProperty.DUBBO_PREFER_JSON_FRAMEWORK_NAME;
 
 public class JsonUtils {
 
-    private static volatile JSON json;
+    private static volatile JsonUtil jsonUtil;
 
-    protected static JSON getJson() {
-        if (json == null) {
+    public static JsonUtil getJson() {
+        if (jsonUtil == null) {
             synchronized (JsonUtils.class) {
-                if (json == null) {
-                    String preferJsonFrameworkName = System.getProperty(CommonConstants.PREFER_JSON_FRAMEWORK_NAME);
-                    if (StringUtils.isNotEmpty(preferJsonFrameworkName)) {
-                        try {
-                            JSON instance = null;
-                            switch (preferJsonFrameworkName) {
-                                case "fastjson2":
-                                    instance = new FastJson2Impl();
-                                    break;
-                                case "fastjson":
-                                    instance = new FastJsonImpl();
-                                    break;
-                                case "gson":
-                                    instance = new GsonImpl();
-                                    break;
-                                case "jackson":
-                                    instance = new JacksonImpl();
-                                    break;
-                            }
-                            if (instance != null && instance.isSupport()) {
-                                json = instance;
-                            }
-                        } catch (Throwable ignore) {
-
-                        }
-                    }
-                    if (json == null) {
-                        List<Class<? extends JSON>> jsonClasses = Arrays.asList(
-                                FastJson2Impl.class, FastJsonImpl.class, GsonImpl.class, JacksonImpl.class);
-                        for (Class<? extends JSON> jsonClass : jsonClasses) {
-                            try {
-                                JSON instance = jsonClass.getConstructor().newInstance();
-                                if (instance.isSupport()) {
-                                    json = instance;
-                                    break;
-                                }
-                            } catch (Throwable ignore) {
-
-                            }
-                        }
-                    }
-                    if (json == null) {
-                        throw new IllegalStateException(
-                                "Dubbo unable to find out any json framework (e.g. fastjson2, fastjson, gson, jackson) from jvm env. "
-                                        + "Please import at least one json framework.");
-                    }
+                if (jsonUtil == null) {
+                    jsonUtil = createJsonUtil();
                 }
             }
         }
-        return json;
+        return jsonUtil;
+    }
+
+    private static JsonUtil createJsonUtil() {
+        Map<String, JsonUtil> extensions = new HashMap<>();
+        String preferName = SystemPropertyConfigUtils.getSystemProperty(DUBBO_PREFER_JSON_FRAMEWORK_NAME);
+
+        ClassLoader classLoader = JsonUtil.class.getClassLoader();
+        JsonUtil jsonUtil = loadExtensions(preferName, classLoader, extensions);
+        if (jsonUtil != null) {
+            return jsonUtil;
+        }
+
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null && tccl != classLoader) {
+            jsonUtil = loadExtensions(preferName, classLoader, extensions);
+            if (jsonUtil != null) {
+                return jsonUtil;
+            }
+        }
+
+        TreeMap<Integer, JsonUtil> sortedExtensions = new TreeMap<>();
+        for (JsonUtil extension : extensions.values()) {
+            Activate activate = extension.getClass().getAnnotation(Activate.class);
+            sortedExtensions.put(activate == null ? 0 : activate.order(), extension);
+        }
+
+        if (sortedExtensions.isEmpty()) {
+            throw new IllegalStateException("Dubbo unable to find out any json framework (e.g. fastjson2, "
+                    + "fastjson, gson, jackson) from jvm env. Please import at least one json framework.");
+        }
+
+        return sortedExtensions.firstEntry().getValue();
+    }
+
+    private static JsonUtil loadExtensions(String name, ClassLoader classLoader, Map<String, JsonUtil> extensions) {
+        ServiceLoader<JsonUtil> loader = ServiceLoader.load(JsonUtil.class, classLoader);
+        for (Iterator<JsonUtil> it = loader.iterator(); it.hasNext(); ) {
+            try {
+                JsonUtil extension = it.next();
+                if (extension.isSupport()) {
+                    if (name != null && name.equals(extension.getName())) {
+                        return extension;
+                    }
+                    extensions.put(extension.getName(), extension);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 
     /**
-     * @deprecated for uts only
+     * @deprecated for unit test only
      */
     @Deprecated
-    protected static void setJson(JSON json) {
-        JsonUtils.json = json;
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    protected static void setJson(JsonUtil json) {
+        jsonUtil = json;
     }
 
     public static <T> T toJavaObject(String json, Type type) {
@@ -105,6 +112,10 @@ public class JsonUtils {
 
     public static String toJson(Object obj) {
         return getJson().toJson(obj);
+    }
+
+    public static String toPrettyJson(Object obj) {
+        return getJson().toPrettyJson(obj);
     }
 
     public static List<?> getList(Map<String, ?> obj, String key) {
@@ -121,6 +132,14 @@ public class JsonUtils {
 
     public static Map<String, ?> getObject(Map<String, ?> obj, String key) {
         return getJson().getObject(obj, key);
+    }
+
+    public static Object convertObject(Object obj, Type targetType) {
+        return getJson().convertObject(obj, targetType);
+    }
+
+    public static Object convertObject(Object obj, Class<?> targetType) {
+        return getJson().convertObject(obj, targetType);
     }
 
     public static Double getNumberAsDouble(Map<String, ?> obj, String key) {
@@ -145,5 +164,9 @@ public class JsonUtils {
 
     public static List<String> checkStringList(List<?> rawList) {
         return getJson().checkStringList(rawList);
+    }
+
+    public static boolean checkJson(String json) {
+        return getJson().isJson(json);
     }
 }
